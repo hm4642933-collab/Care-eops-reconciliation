@@ -1,0 +1,59 @@
+import streamlit as st
+import pandas as pd
+import io
+
+st.set_page_config(page_title="Care Master vs EOPS Reconciler", layout="wide")
+
+st.title("📊 Care Master vs EOPS Reconciliation Portal")
+st.write("Dono Excel files upload karein aur 1-Click mein Reconciliation Report generate karein.")
+
+col1, col2 = st.columns(2)
+
+with col1:
+cm_file = st.file_uploader("Care Master File Upload Karein", type=["xlsx", "xls"])
+
+with col2:
+eops_file = st.file_uploader("EOPS File Upload Karein", type=["xlsx", "xls"])
+
+if cm_file and eops_file:
+if st.button("🚀 Generate Reconciliation Report"):
+with st.spinner("Data process ho raha hai..."):
+df_cm = pd.read_excel(cm_file)
+df_eops = pd.read_excel(eops_file)
+
+# Grouping & Summing Amounts
+cm_summary = df_cm.groupby(['Resident Ref', 'Resident Name'], as_index=False)['Total Weekly Fee'].sum()
+eops_summary = df_eops.groupby(['SUID', 'Service User Name', 'SU Surname'], as_index=False)['Total Weekly Charge (Excluding Agency)'].sum()
+eops_summary['Full Name'] = eops_summary['Service User Name'].fillna('') + ' ' + eops_summary['SU Surname'].fillna('')
+
+# Merging
+merged = pd.merge(cm_summary, eops_summary, left_on='Resident Ref', right_on='SUID', how='outer')
+merged['Total Weekly Fee'] = merged['Total Weekly Fee'].fillna(0)
+merged['Total Weekly Charge (Excluding Agency)'] = merged['Total Weekly Charge (Excluding Agency)'].fillna(0)
+merged['Difference'] = merged['Total Weekly Fee'] - merged['Total Weekly Charge (Excluding Agency)']
+
+# Filtering Results
+mismatches = merged[(merged['Resident Ref'].notna()) & (merged['SUID'].notna()) & (merged['Difference'].abs() >= 0.01)]
+missing_in_eops = merged[merged['SUID'].isna()]
+missing_in_cm = merged[merged['Resident Ref'].isna()]
+matches = merged[(merged['Resident Ref'].notna()) & (merged['SUID'].notna()) & (merged['Difference'].abs() < 0.01)]
+
+# Excel Buffer Generation
+buffer = io.BytesIO()
+with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+pd.DataFrame({
+'Metric': ['Total Records Evaluated', 'Exact Matches', 'Amount Mismatches', 'Missing in EOPS', 'Missing in Care Master'],
+'Count': [len(merged), len(matches), len(mismatches), len(missing_in_eops), len(missing_in_cm)]
+}).to_excel(writer, sheet_name='Summary', index=False)
+
+mismatches[['Resident Ref', 'Resident Name', 'Full Name', 'Total Weekly Fee', 'Total Weekly Charge (Excluding Agency)', 'Difference']].to_excel(writer, sheet_name='Amount Mismatches', index=False)
+missing_in_eops[['Resident Ref', 'Resident Name', 'Total Weekly Fee']].to_excel(writer, sheet_name='Missing in EOPS', index=False)
+missing_in_cm[['SUID', 'Full Name', 'Total Weekly Charge (Excluding Agency)']].to_excel(writer, sheet_name='Missing in Care Master', index=False)
+
+st.success("✅ Reconciliation Complete!")
+st.download_button(
+label="📥 Download Excel Reconciliation Report",
+data=buffer.getvalue(),
+file_name="Reconciliation_Report.xlsx",
+mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
