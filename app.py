@@ -47,24 +47,32 @@ if cm_file and eops_file:
             df_cm.columns = [str(c).strip() for c in df_cm.columns]
             df_eops.columns = [str(c).strip() for c in df_eops.columns]
             
+            # Clean Charge Type string spaces
+            if 'Charge Type' in df_cm.columns:
+                df_cm['Charge Type Clean'] = df_cm['Charge Type'].astype(str).str.strip().str.upper()
+            else:
+                df_cm['Charge Type Clean'] = ""
+
             # Filter Block rows from Care Master
             df_cm = df_cm[~df_cm['Resident Ref'].astype(str).str.startswith(('BLOCK', 'Block', 'BLK'), na=False)].copy()
             df_cm['SUID_Clean'] = df_cm['Resident Ref'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
             
             # Care Master Aggregation (Standard vs 1-to-1)
-            cm_stand = df_cm[df_cm['Charge Type'].astype(str).str.upper() == 'STAND'].groupby('SUID_Clean').agg({
+            cm_stand = df_cm[df_cm['Charge Type Clean'] == 'STAND'].groupby('SUID_Clean').agg({
                 'Report Hours': 'sum',
                 'Total Weekly Fee': 'sum'
             }).rename(columns={'Report Hours': 'CM Standard Hours', 'Total Weekly Fee': 'CM Standard Weekly Rate'})
             
-            cm_1to1 = df_cm[df_cm['Charge Type'].astype(str).str.upper() == '1TO1'].groupby('SUID_Clean').agg({
+            cm_1to1 = df_cm[df_cm['Charge Type Clean'] == '1TO1'].groupby('SUID_Clean').agg({
                 'Report Hours': 'sum',
                 'Total Weekly Fee': 'sum'
             }).rename(columns={'Report Hours': 'CM 1to1 Hours', 'Total Weekly Fee': 'CM 1to1 Weekly Rate'})
             
-            cm_info = df_cm.groupby('SUID_Clean').agg({
+            # Filter out HB and TC from CM Funding description to keep it clean
+            cm_care_only = df_cm[~df_cm['Charge Type Clean'].isin(['HB', 'TC'])].copy()
+            cm_info = cm_care_only.groupby('SUID_Clean').agg({
                 'Resident Name': 'first',
-                'Inv Period Description': lambda x: ', '.join(set(str(v) for v in x if pd.notna(v)))
+                'Inv Period Description': lambda x: ', '.join(set(str(v).strip() for v in x if pd.notna(v)))
             }).rename(columns={'Resident Name': 'CM Resident Name', 'Inv Period Description': 'CM Funding'})
             
             cm_summary = cm_info.join(cm_stand, how='left').join(cm_1to1, how='left').fillna(0).reset_index()
@@ -83,7 +91,7 @@ if cm_file and eops_file:
             
             eops_summary = df_eops.groupby('SUID_Clean').agg({
                 'EOPS Full Name': 'first',
-                'FundingAuthority': lambda x: ', '.join(set(str(v) for v in x if pd.notna(v))),
+                'FundingAuthority': lambda x: ', '.join(set(str(v).strip() for v in x if pd.notna(v) and str(v).strip() != '')),
                 'EOPS Standard Hours': 'sum',
                 'EOPS Standard Weekly Rate': 'sum',
                 'EOPS 1to1 Hours': 'sum',
@@ -93,10 +101,12 @@ if cm_file and eops_file:
             # Merging Data
             merged = pd.merge(cm_summary, eops_summary, on='SUID_Clean', how='outer')
             
-            # Single Combined Columns for Info (No Duplicates)
+            # Clean Single Column Info (EOPS Funding takes primary priority)
             merged['SU ID'] = merged['SUID_Clean']
             merged['Service User Name'] = merged['CM Resident Name'].combine_first(merged['EOPS Full Name'])
-            merged['Funding Authority'] = merged['CM Funding'].combine_first(merged['EOPS Funding'])
+            
+            # Funding Authority: Prefer EOPS clean funding authority, fallback to CM Care Funding
+            merged['Funding Authority'] = merged['EOPS Funding'].replace('', None).combine_first(merged['CM Funding'])
             
             # Numeric Columns Clean & Difference Logic
             num_cols = ['CM Standard Hours', 'EOPS Standard Hours', 'CM Standard Weekly Rate', 'EOPS Standard Weekly Rate',
