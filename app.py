@@ -142,24 +142,19 @@ if cm_file and eops_file:
             
             final_recon = merged[final_columns].sort_values(by=['Funding Authority', 'Service User Name']).copy()
             
-            # --- PROPERTY DASHBOARD COMPUTATION ---
-            property_df = df_eops.groupby('Property').agg(
-                Total_Core_Hours=('EOPS Core Hours', 'sum'),
-                Total_1to1_Hours=('EOPS 1to1 Hours', 'sum'),
-                Occupied_Beds=('SUID_Clean', 'nunique')
-            ).reset_index()
+            # --- PROPERTY DASHBOARD COMPUTATION (FIXED KEYERROR) ---
+            property_df = df_eops.groupby('Property').agg({
+                'EOPS Core Hours': 'sum',
+                'EOPS 1to1 Hours': 'sum',
+                'SUID_Clean': 'nunique'
+            }).reset_index()
             
-            # Default capacity (11 beds per property baseline, adjustable as needed)
-            property_df['Total Beds'] = property_df['Occupied Beds'].apply(lambda x: max(x, 11))
-            property_df['Vacant Beds'] = property_df['Total Beds'] - property_df['Occupied Beds']
+            # Standardize column headers
+            property_df.columns = ['Property', 'Total Core Hours', 'Total 1:1 Hours', 'Occupied Beds']
             
-            property_df.rename(columns={
-                'Total_Core_Hours': 'Total Core Hours',
-                'Total_1to1_Hours': 'Total 1:1 Hours',
-                'Occupied_Beds': 'Occupied Beds',
-                'Total Beds': 'Total Beds Capacity',
-                'Vacant Beds': 'Vacant Beds'
-            }, inplace=True)
+            # Capacity and Vacancy calculations
+            property_df['Total Beds Capacity'] = property_df['Occupied Beds'].apply(lambda x: max(x, 11))
+            property_df['Vacant Beds'] = property_df['Total Beds Capacity'] - property_df['Occupied Beds']
             
             property_df = property_df[['Property', 'Total Core Hours', 'Total 1:1 Hours', 'Total Beds Capacity', 'Occupied Beds', 'Vacant Beds']]
 
