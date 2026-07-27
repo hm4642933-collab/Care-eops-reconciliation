@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import io
 
-st.set_page_config(page_title="Care Master vs EOPS Reconciler & Dashboard", layout="wide")
+st.set_page_config(page_title="Care Master vs EOPS Reconciler & Property Dashboard", layout="wide")
 
 # ==================== 1. LOGIN SYSTEM ====================
 USERNAME = "admin"
@@ -34,8 +34,8 @@ if st.sidebar.button("🚪 Log Out"):
     st.rerun()
 
 # ==================== 2. MAIN APPLICATION ====================
-st.title("📊 Care Master vs EOPS Reconciliation & Property Dashboard")
-st.write("Upload Care Master and EOPS Excel files to perform split-funding reconciliation and generate property analytics.")
+st.title("📊 Care Master vs EOPS Reconciliation & Property Analytics")
+st.write("Upload Care Master and EOPS Excel files to perform split-funding reconciliation and view property occupancy analytics.")
 
 col1, col2 = st.columns(2)
 with col1:
@@ -69,7 +69,7 @@ if cm_file and eops_file:
             df_eops['Funding_Clean'] = df_eops['FundingAuthority'].astype(str).str.strip()
             df_eops['EOPS Full Name'] = df_eops['Service User Name'].fillna('') + ' ' + df_eops['SU Surname'].fillna('')
             
-            # Filter Housing Benefits (HB) & Tenant Charges (TC) from Care Master Care calculations
+            # --- EXCLUDE TC AND HB FROM CARE CALCULATIONS ---
             df_cm_care = df_cm[~df_cm['Charge Type Clean'].isin(['HB', 'TC'])].copy()
             
             # Care Master Aggregation by [SU ID, Funding Authority] (STAND -> Core)
@@ -107,7 +107,7 @@ if cm_file and eops_file:
                 'EOPS 1to1 Weekly Rate': 'sum'
             }).reset_index()
             
-            # Merge Both Datasets by [SU ID, Funding Authority]
+            # Merge Datasets by [SU ID, Funding Authority] (Ensures separate rows for split funding)
             merged = pd.merge(cm_split, eops_split, on=['SUID_Clean', 'Funding_Clean'], how='outer')
             
             # Header Identifiers
@@ -120,7 +120,7 @@ if cm_file and eops_file:
                         'EOPS Core Hours', 'EOPS Core Weekly Rate', 'EOPS 1to1 Hours', 'EOPS 1to1 Weekly Rate']
             merged[num_cols] = merged[num_cols].fillna(0)
             
-            # Compute Totals at the End
+            # Compute Total Columns at the End
             merged['CM Total Hours'] = merged['CM Core Hours'] + merged['CM 1to1 Hours']
             merged['EOPS Total Hours'] = merged['EOPS Core Hours'] + merged['EOPS 1to1 Hours']
             merged['Total Hours Diff'] = merged['CM Total Hours'] - merged['EOPS Total Hours']
@@ -142,31 +142,40 @@ if cm_file and eops_file:
             
             final_recon = merged[final_columns].sort_values(by=['Funding Authority', 'Service User Name']).copy()
             
-            # --- PROPERTY DASHBOARD COMPUTATION (FIXED KEYERROR) ---
+            # --- PROPERTY DASHBOARD COMPUTATION ---
             property_df = df_eops.groupby('Property').agg({
                 'EOPS Core Hours': 'sum',
                 'EOPS 1to1 Hours': 'sum',
                 'SUID_Clean': 'nunique'
             }).reset_index()
             
-            # Standardize column headers
             property_df.columns = ['Property', 'Total Core Hours', 'Total 1:1 Hours', 'Occupied Beds']
             
-            # Capacity and Vacancy calculations
+            # Set Total Beds Capacity (Defaults to max(Occupied, 11) for full capacity)
             property_df['Total Beds Capacity'] = property_df['Occupied Beds'].apply(lambda x: max(x, 11))
             property_df['Vacant Beds'] = property_df['Total Beds Capacity'] - property_df['Occupied Beds']
             
             property_df = property_df[['Property', 'Total Core Hours', 'Total 1:1 Hours', 'Total Beds Capacity', 'Occupied Beds', 'Vacant Beds']]
 
-            # --- DISPLAY DASHBOARD IN STREAMLIT ---
+            # --- DISPLAY INTERFACE & TABS ---
             tab1, tab2 = st.tabs(["📊 Split-Funding Reconciliation", "🏠 Property Dashboard"])
             
             with tab1:
-                st.subheader("Split-Funded Client Reconciliation")
+                st.subheader("Split-Funded Client Reconciliation Report")
                 st.dataframe(final_recon, use_container_width=True)
                 
             with tab2:
-                st.subheader("Property-by-Property Overview")
+                st.subheader("🏠 Property Occupancy & Hours Dashboard")
+                
+                # --- KPI Metrics Bar ---
+                m1, m2, m3, m4, m5 = st.columns(5)
+                m1.metric("Total Beds Capacity", f"{property_df['Total Beds Capacity'].sum():,}")
+                m2.metric("Occupied Beds", f"{property_df['Occupied Beds'].sum():,}")
+                m3.metric("Vacant Beds", f"{property_df['Vacant Beds'].sum():,}")
+                m4.metric("Total Core Hours", f"{property_df['Total Core Hours'].sum():,.2f}")
+                m5.metric("Total 1:1 Hours", f"{property_df['Total 1:1 Hours'].sum():,.2f}")
+                
+                st.markdown("---")
                 st.dataframe(property_df, use_container_width=True)
             
             # --- EXCEL DOWNLOAD GENERATION ---
