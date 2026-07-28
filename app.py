@@ -505,7 +505,6 @@ if st.session_state.get('processed', False):
           title=f'⭕ Core vs 1to1 Total Hours ({selected_property})',
           color_discrete_sequence=['#1f77b4', '#ff7f0e'],
       )
-      # Text template ko set kiya hai taake percentage ke bajaye actual hours show hon
       fig_circle.update_traces(textinfo='value')
       st.plotly_chart(fig_circle, use_container_width=True)
 
