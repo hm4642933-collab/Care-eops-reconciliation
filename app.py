@@ -120,6 +120,7 @@ if cm_file and eops_file:
       df_cm.columns = [str(c).strip() for c in df_cm.columns]
       df_eops.columns = [str(c).strip() for c in df_eops.columns]
 
+
       def get_col(df, possible_names):
         for name in possible_names:
           for col in df.columns:
@@ -127,7 +128,8 @@ if cm_file and eops_file:
               return col
         return None
 
-      # 1. SUID Mapping (Strictly from EOPS for Base Master)
+
+      # 1. SUID Mapping
       eops_suid_col = get_col(
           df_eops, ['SUID', 'Resident Ref', 'SU Ref', 'Service User ID', 'Ref']
       )
@@ -148,7 +150,7 @@ if cm_file and eops_file:
       df_eops = df_eops.dropna(subset=['SUID_Clean']).copy()
       df_cm = df_cm.dropna(subset=['SUID_Clean']).copy()
 
-      # 2. EOPS Mappings (SU Name, Admission Date, Property, Funding Authority)
+      # 2. EOPS Mappings (Preserving individual split rows)
       fn_eops = get_col(
           df_eops, ['Service User Name', 'SU Name', 'First Name']
       )
@@ -159,17 +161,19 @@ if cm_file and eops_file:
           + ' '
           + (df_eops[sn_eops].fillna('') if sn_eops else '')
       ).str.strip()
+      df_eops['SU Name'] = df_eops['EOPS_Name'].replace('', 'N/A').fillna('N/A')
 
       adm_eops = get_col(
           df_eops, ['Admission Date', 'Admit Date', 'Admission_Date']
       )
-      df_eops['Admission Date Clean'] = (
+      df_eops['Admission Date'] = (
           pd.to_datetime(df_eops[adm_eops], errors='coerce').dt.strftime(
               '%d/%m/%Y'
           )
           if adm_eops
           else 'N/A'
       )
+      df_eops['Admission Date'] = df_eops['Admission Date'].fillna('N/A')
 
       fa_col = get_col(
           df_eops,
@@ -181,48 +185,44 @@ if cm_file and eops_file:
               'Split Funding Council',
           ],
       )
-      df_eops['Council Name'] = (
-          df_eops[fa_col].astype(str).str.strip() if fa_col else 'N/A'
+      df_eops['Funding Authority'] = (
+          df_eops[fa_col].astype(str).str.strip().fillna('N/A')
+          if fa_col
+          else 'N/A'
       )
 
       prop_eops = get_col(
           df_eops,
           ['Property', 'Property Address', 'Address', 'Property_Address'],
       )
-      df_eops['Property Address EOPS'] = (
-          df_eops[prop_eops].astype(str).str.strip() if prop_eops else 'N/A'
+      df_eops['Property'] = (
+          df_eops[prop_eops].astype(str).str.strip().fillna('N/A')
+          if prop_eops
+          else 'N/A'
       )
 
-      # Build Base Information strictly from EOPS
-      base_info = (
-          df_eops.groupby('SUID_Clean')
-          .agg({
-              'EOPS_Name': 'first',
-              'Admission Date Clean': 'first',
-              'Council Name': 'first',
-              'Property Address EOPS': 'first',
-          })
-          .reset_index()
-      )
+      # EOPS Numeric Columns for individual rows
+      core_h = get_col(df_eops, ['Core Hours'])
+      dm_h = get_col(df_eops, ['Direct Management On Site Hours'])
+      core_c = get_col(df_eops, ['Core Weekly Charges'])
+      dm_c = get_col(df_eops, ['Direct Management On Site Weekly Charges'])
+      one_h = get_col(df_eops, ['Total 1:1 + PC Hours', '1to1 Hours'])
+      one_c = get_col(df_eops, ['Total 1:1 Weekly Charges', '1to1 Charges'])
 
-      base_info.rename(
-          columns={
-              'EOPS_Name': 'SU Name',
-              'Admission Date Clean': 'Admission Date',
-              'Council Name': 'Funding Authority',
-              'Property Address EOPS': 'Property',
-          },
-          inplace=True,
-      )
+      for col in [core_h, dm_h, core_c, dm_c, one_h, one_c]:
+        if col:
+          df_eops[col] = pd.to_numeric(df_eops[col], errors='coerce').fillna(0)
 
-      base_info['SU Name'] = base_info['SU Name'].replace('', 'N/A').fillna('N/A')
-      base_info['Admission Date'] = base_info['Admission Date'].fillna('N/A')
-      base_info['Funding Authority'] = base_info['Funding Authority'].fillna(
-          'N/A'
+      df_eops['EOPS Core Hours'] = (df_eops[core_h] if core_h else 0) + (
+          df_eops[dm_h] if dm_h else 0
       )
-      base_info['Property'] = base_info['Property'].fillna('N/A')
+      df_eops['EOPS Core Weekly Rate'] = (df_eops[core_c] if core_c else 0) + (
+          df_eops[dm_c] if dm_c else 0
+      )
+      df_eops['EOPS 1to1 Hours'] = df_eops[one_h] if one_h else 0
+      df_eops['EOPS 1to1 Weekly Rate'] = df_eops[one_c] if one_c else 0
 
-      # --- CHARGE TYPE FILTERING & CM CALCULATIONS ---
+      # --- CARE MASTER CALCULATIONS (Aggregated per SUID to match against EOPS rows) ---
       charge_col = get_col(df_cm, ['Charge Type'])
       df_cm['Charge Type Clean'] = (
           df_cm[charge_col].astype(str).str.strip().str.upper()
@@ -292,42 +292,22 @@ if cm_file and eops_file:
           )
       )
 
-      # --- EOPS CALCULATIONS ---
-      core_h = get_col(df_eops, ['Core Hours'])
-      dm_h = get_col(df_eops, ['Direct Management On Site Hours'])
-      core_c = get_col(df_eops, ['Core Weekly Charges'])
-      dm_c = get_col(df_eops, ['Direct Management On Site Weekly Charges'])
-      one_h = get_col(df_eops, ['Total 1:1 + PC Hours', '1to1 Hours'])
-      one_c = get_col(df_eops, ['Total 1:1 Weekly Charges', '1to1 Charges'])
+      # --- BUILD RECONCILIATION BASE ON EOPS ROWS (Keeps Split Funding rows separate) ---
+      recon = df_eops[[
+          'SUID_Clean',
+          'SU Name',
+          'Admission Date',
+          'Funding Authority',
+          'Property',
+          'EOPS Core Hours',
+          'EOPS Core Weekly Rate',
+          'EOPS 1to1 Hours',
+          'EOPS 1to1 Weekly Rate',
+      ]].copy()
 
-      for col in [core_h, dm_h, core_c, dm_c, one_h, one_c]:
-        if col:
-          df_eops[col] = pd.to_numeric(df_eops[col], errors='coerce').fillna(0)
-
-      df_eops['EOPS Core Hours'] = (df_eops[core_h] if core_h else 0) + (
-          df_eops[dm_h] if dm_h else 0
-      )
-      df_eops['EOPS Core Weekly Rate'] = (df_eops[core_c] if core_c else 0) + (
-          df_eops[dm_c] if dm_c else 0
-      )
-      df_eops['EOPS 1to1 Hours'] = df_eops[one_h] if one_h else 0
-      df_eops['EOPS 1to1 Weekly Rate'] = df_eops[one_c] if one_c else 0
-
-      eops_calc = (
-          df_eops.groupby('SUID_Clean')
-          .agg({
-              'EOPS Core Hours': 'sum',
-              'EOPS Core Weekly Rate': 'sum',
-              'EOPS 1to1 Hours': 'sum',
-              'EOPS 1to1 Weekly Rate': 'sum',
-          })
-          .reset_index()
-      )
-
-      # --- MERGE ALL RECON DATA ---
-      recon = pd.merge(base_info, cm_core, on='SUID_Clean', how='left')
-      recon = pd.merge(recon, cm_1to1, on='SUID_Clean', how='left')
-      recon = pd.merge(recon, eops_calc, on='SUID_Clean', how='left').fillna(0)
+      # Merge CM data based on SUID
+      recon = pd.merge(recon, cm_core, on='SUID_Clean', how='left')
+      recon = pd.merge(recon, cm_1to1, on='SUID_Clean', how='left').fillna(0)
 
       # Differences
       recon['Core Hours Difference'] = (
@@ -406,7 +386,10 @@ if st.session_state.get('processed', False):
   property_detail_df = st.session_state.property_detail_df
 
   if navigation_page == '📋 Care Master vs EOPS Reconciliation':
-    st.subheader('📋 Split-Funded Care Master vs EOPS Reconciliation Table')
+    st.subheader(
+        '📋 Split-Funded Care Master vs EOPS Reconciliation Table (Individual'
+        ' Split Rows)'
+    )
 
     st.dataframe(
         final_recon,
@@ -417,6 +400,11 @@ if st.session_state.get('processed', False):
             ),
             'SU Name': st.column_config.TextColumn(
                 'SU Name', help='Full Service User Name', width='large'
+            ),
+            'Funding Authority': st.column_config.TextColumn(
+                'Funding Authority',
+                help='Council/Funding Authority for this split row',
+                width='medium',
             ),
         },
     )
@@ -444,7 +432,7 @@ if st.session_state.get('processed', False):
 
     st.markdown('---')
 
-    # --- 2. HOURS SUMMARY METRICS ---
+    # --- 2. HOURS & RATES SUMMARY ---
     st.markdown('### ⏱️ **EOPS Hours Summary**')
     m1, m2, m3 = st.columns(3)
     m1.metric(
@@ -535,6 +523,11 @@ if st.session_state.get('processed', False):
             ),
             'SU Name': st.column_config.TextColumn(
                 'SU Name', help='Full Service User Name', width='large'
+            ),
+            'Funding Authority': st.column_config.TextColumn(
+                'Funding Authority',
+                help='Council/Funding Authority for this split row',
+                width='medium',
             ),
         },
     )
