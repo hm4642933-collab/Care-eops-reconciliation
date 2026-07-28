@@ -8,14 +8,30 @@ st.set_page_config(
     layout="wide"
 )
 
-# Custom Styling for modern Sidebar and UI
+# Custom CSS for Bootstrap 'btn-info' styled Logout button and clean navigation
 st.markdown("""
     <style>
+    /* Bootstrap btn-info Style for Logout Button */
+    div.stButton > button[kind="primary"], div.stButton > button {
+        background-color: #17a2b8 !important;
+        color: white !important;
+        border: 1px solid #17a2b8 !important;
+        border-radius: 5px !important;
+        font-weight: 600 !important;
+        font-size: 15px !important;
+        padding: 8px 16px !important;
+        transition: all 0.3s ease !important;
+    }
+    div.stButton > button:hover {
+        background-color: #138496 !important;
+        border-color: #117a8b !important;
+        color: white !important;
+        box-shadow: 0px 4px 8px rgba(0,0,0,0.2) !important;
+    }
+    
+    /* Sidebar styling */
     .stSidebar {
         background-color: #1e222d;
-    }
-    div[data-testid="stSidebarNav"] {
-        padding-top: 10px;
     }
     .stRadio > label {
         font-weight: bold;
@@ -49,22 +65,23 @@ if not st.session_state.logged_in:
             st.error("❌ Invalid credentials")
     st.stop()
 
-# ==================== 2. BEAUTIFUL SIDEBAR NAVIGATION ====================
+# ==================== 2. SIDEBAR WITH INFO BUTTON & TABS ====================
 with st.sidebar:
     st.markdown("### 🏢 **Portal Menu**")
     
-    # Clean styled Navigation Buttons
-    navigation_page = st.radio(
-        "Select Section:",
-        ["📋 Care Master vs EOPS Reconciliation", "🏠 Property Dashboard"],
-        index=0
-    )
-    
-    st.markdown("---")
-    
+    # Bootstrap btn-info styled Log Out Button
     if st.button("🚪 Log Out", use_container_width=True):
         st.session_state.logged_in = False
         st.rerun()
+        
+    st.markdown("---")
+    
+    # Navigation Tabs right below Log Out button
+    navigation_page = st.radio(
+        "Select Tab / Page:",
+        ["📋 Care Master vs EOPS Reconciliation", "🏠 Property Dashboard"],
+        index=0
+    )
 
 # ==================== 3. MAIN APPLICATION ====================
 st.title("📊 Care Master vs EOPS Reconciliation & Property Portal")
@@ -87,7 +104,7 @@ if cm_file and eops_file:
             df_cm.columns = [str(c).strip() for c in df_cm.columns]
             df_eops.columns = [str(c).strip() for c in df_eops.columns]
             
-            # Helper Function to find column safely
+            # Safe Column Finder
             def get_col(df, possible_names):
                 for name in possible_names:
                     for col in df.columns:
@@ -95,12 +112,11 @@ if cm_file and eops_file:
                             return col
                 return None
 
-            # Safe SUID Column Matching
             cm_suid_col = get_col(df_cm, ['Resident Ref', 'SUID', 'SU Ref', 'Service User ID'])
             eops_suid_col = get_col(df_eops, ['SUID', 'Resident Ref', 'SU Ref', 'Service User ID'])
 
             if not cm_suid_col or not eops_suid_col:
-                st.error("❌ Error: Could not automatically detect SUID / Resident Ref column in uploaded files.")
+                st.error("❌ Error: SUID / Resident Ref column missing in uploaded files.")
                 st.stop()
 
             # SUID Normalization
@@ -114,10 +130,7 @@ if cm_file and eops_file:
             
             # Admission Date
             adm_col = get_col(df_cm, ['Admission Date'])
-            if adm_col:
-                df_cm['Admission Date Clean'] = pd.to_datetime(df_cm[adm_col], errors='coerce').dt.strftime('%d/%m/%Y')
-            else:
-                df_cm['Admission Date Clean'] = "N/A"
+            df_cm['Admission Date Clean'] = pd.to_datetime(df_cm[adm_col], errors='coerce').dt.strftime('%d/%m/%Y') if adm_col else "N/A"
 
             # EOPS Base Columns Safely Mapped
             fn_col = get_col(df_eops, ['Service User Name', 'SU Name', 'First Name'])
@@ -214,12 +227,12 @@ if cm_file and eops_file:
 
             property_detail_df['Total Hours'] = property_detail_df['Core Hours'] + property_detail_df['1to1 Hours']
 
-            # Save in session state for tab switching without reloading
+            # Session State
             st.session_state.processed = True
             st.session_state.final_recon = final_recon
             st.session_state.property_detail_df = property_detail_df
 
-# Display Content Based on Selected Navigation Menu
+# Routing according to Sidebar Tab selection
 if st.session_state.get("processed", False):
     final_recon = st.session_state.final_recon
     property_detail_df = st.session_state.property_detail_df
@@ -231,7 +244,7 @@ if st.session_state.get("processed", False):
     elif navigation_page == "🏠 Property Dashboard":
         st.subheader("🏠 Property Dynamic Dashboard")
 
-        # Upper Metrics Cards
+        # Upper Metrics
         FIXED_TOTAL_BEDS = 539
         total_occupied_su = property_detail_df['SUID'].nunique()
         vacancies_diff = FIXED_TOTAL_BEDS - total_occupied_su
@@ -246,31 +259,31 @@ if st.session_state.get("processed", False):
 
         st.markdown("---")
 
-        # Search Slicer
+        # Property Slicer Search
         unique_props = [str(p).strip() for p in property_detail_df['Property'].dropna().unique() if str(p).strip() != ""]
         property_options = ["All Properties"] + sorted(list(set(unique_props)))
 
-        st.subheader("🔍 Property Search & Interactive Slicer")
-        selected_property = st.selectbox("Search or Select Property to Filter:", property_options)
+        st.subheader("🔍 Property Search & Dynamic Slicer")
+        selected_property = st.selectbox("Search or Select Property to Inspect:", property_options)
 
         if selected_property != "All Properties":
             filtered_dashboard_df = property_detail_df[property_detail_df['Property'].astype(str) == selected_property]
         else:
             filtered_dashboard_df = property_detail_df
 
-        # Visual Chart
+        # Bar Chart
         st.subheader("📈 Hours Breakdown Chart")
         chart_data = filtered_dashboard_df.groupby('Property')[['Core Hours', '1to1 Hours', 'Total Hours']].sum()
         st.bar_chart(chart_data)
 
         st.markdown("---")
 
-        # Property Table
+        # Data Table
         st.subheader(f"📋 Service User Details - [{selected_property}]")
         display_cols = ['SUID', 'SU Name', 'Funding Authority', 'Property', 'Core Hours', '1to1 Hours', 'Total Hours']
         st.dataframe(filtered_dashboard_df[display_cols], use_container_width=True)
 
-    # Excel Download Button in Sidebar
+    # Download Option
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
         final_recon.to_excel(writer, sheet_name='Reconciliation', index=False)
