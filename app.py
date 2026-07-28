@@ -127,47 +127,39 @@ if cm_file and eops_file:
               return col
         return None
 
-      # 1. SUID Matching
-      cm_suid_col = get_col(
-          df_cm, ['Resident Ref', 'SUID', 'SU Ref', 'Service User ID', 'Ref']
-      )
+      # 1. SUID Mapping (Strictly from EOPS for Base Master)
       eops_suid_col = get_col(
           df_eops, ['SUID', 'Resident Ref', 'SU Ref', 'Service User ID', 'Ref']
       )
+      cm_suid_col = get_col(
+          df_cm, ['Resident Ref', 'SUID', 'SU Ref', 'Service User ID', 'Ref']
+      )
 
-      if not cm_suid_col or not eops_suid_col:
+      if not eops_suid_col or not cm_suid_col:
         st.error(
-            "❌ Error: SUID / Resident Ref column not found. Please check"
-            " uploaded files."
+            "❌ Error: SUID / Resident Ref column not found in EOPS or Care"
+            " Master files."
         )
         st.stop()
 
-      df_cm['SUID_Clean'] = clean_suid(df_cm[cm_suid_col])
       df_eops['SUID_Clean'] = clean_suid(df_eops[eops_suid_col])
+      df_cm['SUID_Clean'] = clean_suid(df_cm[cm_suid_col])
 
-      df_cm = df_cm.dropna(subset=['SUID_Clean']).copy()
       df_eops = df_eops.dropna(subset=['SUID_Clean']).copy()
+      df_cm = df_cm.dropna(subset=['SUID_Clean']).copy()
 
-      # 2. Names Mapping
+      # 2. EOPS Mappings (SU Name, Admission Date, Property, Funding Authority)
       fn_eops = get_col(
           df_eops, ['Service User Name', 'SU Name', 'First Name']
       )
       sn_eops = get_col(df_eops, ['SU Surname', 'Surname', 'Last Name'])
-      cm_name = get_col(
-          df_cm,
-          ['Service User Name', 'SU Name', 'Resident Name', 'Client Name'],
-      )
 
       df_eops['EOPS_Name'] = (
           (df_eops[fn_eops].fillna('') if fn_eops else '')
           + ' '
           + (df_eops[sn_eops].fillna('') if sn_eops else '')
       ).str.strip()
-      df_cm['CM_Name'] = (
-          df_cm[cm_name].fillna('').astype(str).str.strip() if cm_name else ''
-      )
 
-      # 3. Admission Date Mapping
       adm_eops = get_col(
           df_eops, ['Admission Date', 'Admit Date', 'Admission_Date']
       )
@@ -179,7 +171,6 @@ if cm_file and eops_file:
           else 'N/A'
       )
 
-      # 4. Funding Authority
       fa_col = get_col(
           df_eops,
           [
@@ -194,7 +185,6 @@ if cm_file and eops_file:
           df_eops[fa_col].astype(str).str.strip() if fa_col else 'N/A'
       )
 
-      # 5. Property Address
       prop_eops = get_col(
           df_eops,
           ['Property', 'Property Address', 'Address', 'Property_Address'],
@@ -203,8 +193,8 @@ if cm_file and eops_file:
           df_eops[prop_eops].astype(str).str.strip() if prop_eops else 'N/A'
       )
 
-      # Base Tables
-      eops_base = (
+      # Build Base Information strictly from EOPS
+      base_info = (
           df_eops.groupby('SUID_Clean')
           .agg({
               'EOPS_Name': 'first',
@@ -215,24 +205,22 @@ if cm_file and eops_file:
           .reset_index()
       )
 
-      cm_base = (
-          df_cm.groupby('SUID_Clean').agg({'CM_Name': 'first'}).reset_index()
+      base_info.rename(
+          columns={
+              'EOPS_Name': 'SU Name',
+              'Admission Date Clean': 'Admission Date',
+              'Council Name': 'Funding Authority',
+              'Property Address EOPS': 'Property',
+          },
+          inplace=True,
       )
 
-      # Outer Merge
-      base_info = pd.merge(eops_base, cm_base, on='SUID_Clean', how='outer')
-      base_info['SU Name'] = (
-          base_info['EOPS_Name']
-          .fillna('')
-          .replace('', pd.NA)
-          .fillna(base_info['CM_Name'])
-          .fillna('N/A')
-      )
-      base_info['Admission Date'] = base_info['Admission Date Clean'].fillna(
+      base_info['SU Name'] = base_info['SU Name'].replace('', 'N/A').fillna('N/A')
+      base_info['Admission Date'] = base_info['Admission Date'].fillna('N/A')
+      base_info['Funding Authority'] = base_info['Funding Authority'].fillna(
           'N/A'
       )
-      base_info['Funding Authority'] = base_info['Council Name'].fillna('N/A')
-      base_info['Property'] = base_info['Property Address EOPS'].fillna('N/A')
+      base_info['Property'] = base_info['Property'].fillna('N/A')
 
       # --- CHARGE TYPE FILTERING & CM CALCULATIONS ---
       charge_col = get_col(df_cm, ['Charge Type'])
@@ -242,14 +230,7 @@ if cm_file and eops_file:
           else ''
       )
 
-      # Block Account Removal
-      df_cm = df_cm[
-          ~df_cm[cm_suid_col]
-          .astype(str)
-          .str.startswith(('BLOCK', 'Block', 'BLK'), na=False)
-      ].copy()
-
-      # 🔥 STRICT FILTERING: EXCLUDE TC & HB lines explicitly
+      # Exclude TC, HB & Top Up lines
       df_cm = df_cm[
           ~df_cm['Charge Type Clean'].isin([
               'TC',
