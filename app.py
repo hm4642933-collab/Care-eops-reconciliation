@@ -159,38 +159,47 @@ if cm_file and eops_file:
                 st.subheader("🏠 Property Dynamic Dashboard & SUID Breakdown")
 
                 # =========================================================
-                # 🛠️ FIXED SECTION (Prevents TypeError on sorting)
+                # 1. UPPER DASHBOARD METRICS
+                # =========================================================
+                FIXED_TOTAL_BEDS = 539
+                total_occupied_su = property_detail_df['SUID'].nunique()
+                vacancies_diff = FIXED_TOTAL_BEDS - total_occupied_su
+
+                m1, m2, m3, m4, m5, m6 = st.columns(6)
+                m1.metric("Total Beds", f"{FIXED_TOTAL_BEDS:,}")
+                m2.metric("Occupied Beds (EOPS)", f"{total_occupied_su:,}")
+                m3.metric("Vacancies Difference", f"{vacancies_diff:,}")
+                m4.metric("EOPS Core Hours", f"{property_detail_df['Core Hours'].sum():,.2f}")
+                m5.metric("EOPS 1to1 Hours", f"{property_detail_df['1to1 Hours'].sum():,.2f}")
+                m6.metric("Total EOPS Hours", f"{property_detail_df['Total Hours'].sum():,.2f}")
+
+                st.markdown("---")
+
+                # =========================================================
+                # 2. SEARCHABLE SLICER & SLICER GRAPH
                 # =========================================================
                 unique_props = [str(p).strip() for p in property_detail_df['Property'].dropna().unique() if str(p).strip() != ""]
                 property_options = ["All Properties"] + sorted(list(set(unique_props)))
 
-                selected_property = st.selectbox("📌 Select Property Address to filter Dashboard Data:", property_options)
+                st.subheader("🔍 Property Search / Slicer")
+                selected_property = st.selectbox("Search & Select Property to Inspect Data & Graph:", property_options)
 
                 if selected_property != "All Properties":
                     filtered_dashboard_df = property_detail_df[property_detail_df['Property'].astype(str) == selected_property]
                 else:
                     filtered_dashboard_df = property_detail_df
-                # =========================================================
 
-                # KPI Calculations
-                FIXED_TOTAL_BEDS = 539
-                occupied_beds = filtered_dashboard_df['SUID'].nunique()
-                vacancies = FIXED_TOTAL_BEDS - occupied_beds
-                vacancies_diff = vacancies
-
-                # METRICS DISPLAY
-                m1, m2, m3, m4, m5, m6 = st.columns(6)
-                m1.metric("Total Beds", f"{FIXED_TOTAL_BEDS:,}")
-                m2.metric("Occupied Beds", f"{occupied_beds:,}")
-                m3.metric("Vacancies", f"{vacancies:,}")
-                m4.metric("Vacancies Difference", f"{vacancies_diff:,}")
-                m5.metric("Total Core Hours", f"{filtered_dashboard_df['Core Hours'].sum():,.2f}")
-                m6.metric("Total 1to1 Hours", f"{filtered_dashboard_df['1to1 Hours'].sum():,.2f}")
+                # Graph Visual for Selected Property
+                st.subheader("📈 Hours Breakdown Chart")
+                chart_data = filtered_dashboard_df.groupby('Property')[['Core Hours', '1to1 Hours', 'Total Hours']].sum()
+                st.bar_chart(chart_data)
 
                 st.markdown("---")
 
-                # DYNAMIC DATA TABLE
-                st.subheader(f"📋 Service User Details - [{selected_property}]")
+                # =========================================================
+                # 3. DYNAMIC DATA TABLE FOR SELECTED PROPERTY
+                # =========================================================
+                st.subheader(f"📋 Service User Data - [{selected_property}]")
                 display_cols = ['SUID', 'SU Name', 'Funding Authority', 'Property', 'Core Hours', '1to1 Hours', 'Total Hours']
                 st.dataframe(filtered_dashboard_df[display_cols], use_container_width=True)
 
