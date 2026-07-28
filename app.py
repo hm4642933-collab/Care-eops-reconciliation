@@ -8,7 +8,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Custom CSS for Bootstrap 'btn-info' styled Logout button and clean navigation
+# Custom Styling for Bootstrap 'btn-info' styled Logout button and Sidebar Navigation
 st.markdown("""
     <style>
     /* Bootstrap btn-info Style for Logout Button */
@@ -29,7 +29,6 @@ st.markdown("""
         box-shadow: 0px 4px 8px rgba(0,0,0,0.2) !important;
     }
     
-    /* Sidebar styling */
     .stSidebar {
         background-color: #1e222d;
     }
@@ -65,7 +64,7 @@ if not st.session_state.logged_in:
             st.error("❌ Invalid credentials")
     st.stop()
 
-# ==================== 2. SIDEBAR WITH INFO BUTTON & TABS ====================
+# ==================== 2. SIDEBAR NAVIGATION ====================
 with st.sidebar:
     st.markdown("### 🏢 **Portal Menu**")
     
@@ -76,9 +75,9 @@ with st.sidebar:
         
     st.markdown("---")
     
-    # Navigation Tabs right below Log Out button
+    # Sidebar Navigation Tabs
     navigation_page = st.radio(
-        "Select Tab / Page:",
+        "Select Section / Tab:",
         ["📋 Care Master vs EOPS Reconciliation", "🏠 Property Dashboard"],
         index=0
     )
@@ -104,7 +103,7 @@ if cm_file and eops_file:
             df_cm.columns = [str(c).strip() for c in df_cm.columns]
             df_eops.columns = [str(c).strip() for c in df_eops.columns]
             
-            # Safe Column Finder
+            # Helper for safe column detection
             def get_col(df, possible_names):
                 for name in possible_names:
                     for col in df.columns:
@@ -112,6 +111,7 @@ if cm_file and eops_file:
                             return col
                 return None
 
+            # 1. SUID: EOPS aur Care Master dono se match/combine
             cm_suid_col = get_col(df_cm, ['Resident Ref', 'SUID', 'SU Ref', 'Service User ID'])
             eops_suid_col = get_col(df_eops, ['SUID', 'Resident Ref', 'SU Ref', 'Service User ID'])
 
@@ -119,39 +119,52 @@ if cm_file and eops_file:
                 st.error("❌ Error: SUID / Resident Ref column missing in uploaded files.")
                 st.stop()
 
-            # SUID Normalization
             df_cm['SUID_Clean'] = df_cm[cm_suid_col].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
             df_eops['SUID_Clean'] = df_eops[eops_suid_col].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
             
-            # Clean Charge Types
+            # 2. SU Name: EOPS & CM se compile
+            fn_eops = get_col(df_eops, ['Service User Name', 'SU Name', 'First Name'])
+            sn_eops = get_col(df_eops, ['SU Surname', 'Surname', 'Last Name'])
+            cm_name = get_col(df_cm, ['Service User Name', 'SU Name', 'Resident Name', 'Client Name'])
+
+            df_eops['EOPS_Name'] = (df_eops[fn_eops].fillna('') if fn_eops else '') + ' ' + (df_eops[sn_eops].fillna('') if sn_eops else '')
+            df_eops['EOPS_Name'] = df_eops['EOPS_Name'].str.strip()
+
+            cm_names_dict = df_cm.groupby('SUID_Clean')[cm_name].first().to_dict() if cm_name else {}
+
+            # 3. Admission Date: EOPS se mapped
+            adm_eops = get_col(df_eops, ['Admission Date', 'Admit Date', 'Admission_Date'])
+            if adm_eops:
+                df_eops['Admission Date Clean'] = pd.to_datetime(df_eops[adm_eops], errors='coerce').dt.strftime('%d/%m/%Y')
+            else:
+                df_eops['Admission Date Clean'] = "N/A"
+
+            # 4. Funding Authority: Council Name / Split Funding
+            fa_col = get_col(df_eops, ['FundingAuthority', 'Funding Authority', 'Council Name', 'LA Name', 'Split Funding Council'])
+            df_eops['Council Name'] = df_eops[fa_col].astype(str).str.strip() if fa_col else 'N/A'
+
+            # 5. Property Address: EOPS se liya jaye
+            prop_eops = get_col(df_eops, ['Property', 'Property Address', 'Address', 'Property_Address'])
+            df_eops['Property Address EOPS'] = df_eops[prop_eops].astype(str).str.strip() if prop_eops else 'N/A'
+
+            # --- EOPS BASE TABLE ---
+            eops_base = df_eops.groupby('SUID_Clean').agg({
+                'EOPS_Name': 'first',
+                'Admission Date Clean': 'first',
+                'Council Name': 'first',
+                'Property Address EOPS': 'first'
+            }).reset_index()
+
+            # SU Name Compile logic (EOPS fallback to CM if blank)
+            eops_base['SU Name'] = eops_base.apply(
+                lambda r: r['EOPS_Name'] if r['EOPS_Name'] != '' else cm_names_dict.get(r['SUID_Clean'], 'N/A'), axis=1
+            )
+
+            # --- CHARGE TYPE FILTERING & CM CALCULATIONS ---
             charge_col = get_col(df_cm, ['Charge Type'])
             df_cm['Charge Type Clean'] = df_cm[charge_col].astype(str).str.strip().str.upper() if charge_col else ""
             df_cm = df_cm[~df_cm[cm_suid_col].astype(str).str.startswith(('BLOCK', 'Block', 'BLK'), na=False)].copy()
-            
-            # Admission Date
-            adm_col = get_col(df_cm, ['Admission Date'])
-            df_cm['Admission Date Clean'] = pd.to_datetime(df_cm[adm_col], errors='coerce').dt.strftime('%d/%m/%Y') if adm_col else "N/A"
 
-            # EOPS Base Columns Safely Mapped
-            fn_col = get_col(df_eops, ['Service User Name', 'SU Name', 'First Name'])
-            sn_col = get_col(df_eops, ['SU Surname', 'Surname', 'Last Name'])
-            fa_col = get_col(df_eops, ['FundingAuthority', 'Funding Authority', 'LA Name'])
-            pr_col = get_col(df_eops, ['Property', 'Property Address', 'Address'])
-
-            df_eops['EOPS Full Name'] = (df_eops[fn_col].fillna('') if fn_col else '') + ' ' + (df_eops[sn_col].fillna('') if sn_col else '')
-            df_eops['EOPS FundingAuthority'] = df_eops[fa_col].astype(str).str.strip() if fa_col else 'N/A'
-            df_eops['EOPS Property'] = df_eops[pr_col].astype(str).str.strip() if pr_col else 'N/A'
-            
-            eops_base = df_eops.groupby('SUID_Clean').agg({
-                'EOPS Full Name': 'first',
-                'EOPS FundingAuthority': 'first',
-                'EOPS Property': 'first'
-            }).reset_index()
-
-            cm_dates = df_cm.groupby('SUID_Clean')['Admission Date Clean'].first().to_dict()
-            eops_base['Admission Date'] = eops_base['SUID_Clean'].map(cm_dates).fillna("N/A")
-
-            # --- CM CALCULATIONS ---
             rep_hrs = get_col(df_cm, ['Report Hours', 'Hours'])
             w_fee = get_col(df_cm, ['Total Weekly Fee', 'Weekly Fee', 'Fee'])
 
@@ -185,7 +198,7 @@ if cm_file and eops_file:
                 'EOPS 1to1 Weekly Rate': 'sum'
             }).reset_index()
 
-            # --- MERGE RECON DATA ---
+            # --- MERGE ALL RECON DATA ---
             recon = pd.merge(eops_base, cm_core, on='SUID_Clean', how='left')
             recon = pd.merge(recon, cm_1to1, on='SUID_Clean', how='left')
             recon = pd.merge(recon, eops_calc, on='SUID_Clean', how='left').fillna(0)
@@ -201,9 +214,9 @@ if cm_file and eops_file:
 
             recon_output = recon.rename(columns={
                 'SUID_Clean': 'SUID',
-                'EOPS Full Name': 'SU Name',
-                'EOPS FundingAuthority': 'Funding Authority',
-                'EOPS Property': 'Property'
+                'Admission Date Clean': 'Admission Date',
+                'Council Name': 'Funding Authority',
+                'Property Address EOPS': 'Property'
             })
 
             final_recon = recon_output[[
@@ -232,7 +245,7 @@ if cm_file and eops_file:
             st.session_state.final_recon = final_recon
             st.session_state.property_detail_df = property_detail_df
 
-# Routing according to Sidebar Tab selection
+# Routing according to Sidebar Tab
 if st.session_state.get("processed", False):
     final_recon = st.session_state.final_recon
     property_detail_df = st.session_state.property_detail_df
@@ -244,7 +257,6 @@ if st.session_state.get("processed", False):
     elif navigation_page == "🏠 Property Dashboard":
         st.subheader("🏠 Property Dynamic Dashboard")
 
-        # Upper Metrics
         FIXED_TOTAL_BEDS = 539
         total_occupied_su = property_detail_df['SUID'].nunique()
         vacancies_diff = FIXED_TOTAL_BEDS - total_occupied_su
@@ -259,7 +271,6 @@ if st.session_state.get("processed", False):
 
         st.markdown("---")
 
-        # Property Slicer Search
         unique_props = [str(p).strip() for p in property_detail_df['Property'].dropna().unique() if str(p).strip() != ""]
         property_options = ["All Properties"] + sorted(list(set(unique_props)))
 
@@ -271,19 +282,17 @@ if st.session_state.get("processed", False):
         else:
             filtered_dashboard_df = property_detail_df
 
-        # Bar Chart
         st.subheader("📈 Hours Breakdown Chart")
         chart_data = filtered_dashboard_df.groupby('Property')[['Core Hours', '1to1 Hours', 'Total Hours']].sum()
         st.bar_chart(chart_data)
 
         st.markdown("---")
 
-        # Data Table
         st.subheader(f"📋 Service User Details - [{selected_property}]")
         display_cols = ['SUID', 'SU Name', 'Funding Authority', 'Property', 'Core Hours', '1to1 Hours', 'Total Hours']
         st.dataframe(filtered_dashboard_df[display_cols], use_container_width=True)
 
-    # Download Option
+    # Download Excel Report
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
         final_recon.to_excel(writer, sheet_name='Reconciliation', index=False)
