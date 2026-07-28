@@ -29,12 +29,13 @@ if not st.session_state.logged_in:
             st.error("❌ Invalid credentials")
     st.stop()
 
+# Logout Sidebar Mein
 if st.sidebar.button("🚪 Log Out"):
     st.session_state.logged_in = False
     st.rerun()
 
 # ==================== 2. MAIN APPLICATION ====================
-st.title("📊 Care Master vs EOPS Reconciliation & Dynamic Property Dashboard")
+st.title("📊 Care Master vs EOPS Reconciliation & Property Portal")
 
 col1, col2 = st.columns(2)
 with col1:
@@ -148,19 +149,21 @@ if cm_file and eops_file:
 
             property_detail_df['Total Hours'] = property_detail_df['Core Hours'] + property_detail_df['1to1 Hours']
 
-            # --- RENDER TABS ---
-            tab1, tab2 = st.tabs(["📊 Care Master vs EOPS Reconciliation", "🏠 Property Dashboard"])
+            # =========================================================
+            # 📑 TABS STRUCTURE (1st: Reconciliation, 2nd: Property Dashboard)
+            # =========================================================
+            tab1, tab2 = st.tabs(["📋 Care Master vs EOPS Reconciliation", "🏠 Property Dashboard"])
 
+            # TAB 1: Care Master vs EOPS Reconciliation
             with tab1:
-                st.subheader("Split-Funded Care Master vs EOPS Reconciliation Table")
+                st.subheader("📋 Split-Funded Care Master vs EOPS Reconciliation Table")
                 st.dataframe(final_recon, use_container_width=True)
 
+            # TAB 2: Property Dashboard
             with tab2:
-                st.subheader("🏠 Property Dynamic Dashboard & SUID Breakdown")
+                st.subheader("🏠 Property Dynamic Dashboard")
 
-                # =========================================================
-                # 1. UPPER DASHBOARD METRICS
-                # =========================================================
+                # Upper Dashboard Metrics
                 FIXED_TOTAL_BEDS = 539
                 total_occupied_su = property_detail_df['SUID'].nunique()
                 vacancies_diff = FIXED_TOTAL_BEDS - total_occupied_su
@@ -175,31 +178,27 @@ if cm_file and eops_file:
 
                 st.markdown("---")
 
-                # =========================================================
-                # 2. SEARCHABLE SLICER & SLICER GRAPH
-                # =========================================================
+                # Searchable Slicer & Filter
                 unique_props = [str(p).strip() for p in property_detail_df['Property'].dropna().unique() if str(p).strip() != ""]
                 property_options = ["All Properties"] + sorted(list(set(unique_props)))
 
-                st.subheader("🔍 Property Search / Slicer")
-                selected_property = st.selectbox("Search & Select Property to Inspect Data & Graph:", property_options)
+                st.subheader("🔍 Property Search & Slicer")
+                selected_property = st.selectbox("Search / Select Property to View Data & Graph:", property_options)
 
                 if selected_property != "All Properties":
                     filtered_dashboard_df = property_detail_df[property_detail_df['Property'].astype(str) == selected_property]
                 else:
                     filtered_dashboard_df = property_detail_df
 
-                # Graph Visual for Selected Property
+                # Visual Graph Slicer Chart
                 st.subheader("📈 Hours Breakdown Chart")
                 chart_data = filtered_dashboard_df.groupby('Property')[['Core Hours', '1to1 Hours', 'Total Hours']].sum()
                 st.bar_chart(chart_data)
 
                 st.markdown("---")
 
-                # =========================================================
-                # 3. DYNAMIC DATA TABLE FOR SELECTED PROPERTY
-                # =========================================================
-                st.subheader(f"📋 Service User Data - [{selected_property}]")
+                # Property SUID Table
+                st.subheader(f"📋 Property Service User Details - [{selected_property}]")
                 display_cols = ['SUID', 'SU Name', 'Funding Authority', 'Property', 'Core Hours', '1to1 Hours', 'Total Hours']
                 st.dataframe(filtered_dashboard_df[display_cols], use_container_width=True)
 
@@ -210,7 +209,7 @@ if cm_file and eops_file:
                 property_detail_df.to_excel(writer, sheet_name='Property Dashboard', index=False)
 
             st.download_button(
-                label="📥 Download Updated Reconciliation & Dashboard Excel Report",
+                label="📥 Download Reconciliation & Property Report (.xlsx)",
                 data=buffer.getvalue(),
                 file_name="SU_Reconciliation_And_Property_Dashboard.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
