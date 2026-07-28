@@ -29,13 +29,26 @@ if not st.session_state.logged_in:
             st.error("❌ Invalid credentials")
     st.stop()
 
-# Logout Sidebar Mein
-if st.sidebar.button("🚪 Log Out"):
-    st.session_state.logged_in = False
-    st.rerun()
+# ==================== 2. SIDEBAR NAVIGATION ====================
+# Sidebar Menu (Log Out ke niche Tabs)
+with st.sidebar:
+    st.title("📌 Navigation Menu")
+    
+    # 1. Log Out Button at Top
+    if st.button("🚪 Log Out", use_container_width=True):
+        st.session_state.logged_in = False
+        st.rerun()
+        
+    st.markdown("---")
+    
+    # 2. Sidebar Tabs (Log Out Ke Niche Navigation Tabs)
+    navigation_page = st.radio(
+        "Select Tab / Page:",
+        ["📋 Care Master vs EOPS Reconciliation", "🏠 Property Dashboard"]
+    )
 
-# ==================== 2. MAIN APPLICATION ====================
-st.title("📊 Care Master vs EOPS Reconciliation & Property Portal")
+# ==================== 3. MAIN APPLICATION ====================
+st.title("📊 SU Reconciliation & Dynamic Property Portal")
 
 col1, col2 = st.columns(2)
 with col1:
@@ -150,17 +163,13 @@ if cm_file and eops_file:
             property_detail_df['Total Hours'] = property_detail_df['Core Hours'] + property_detail_df['1to1 Hours']
 
             # =========================================================
-            # 📑 TABS STRUCTURE (1st: Reconciliation, 2nd: Property Dashboard)
+            # 🔄 NAVIGATION ROUTING BASED ON SIDEBAR SELECTION
             # =========================================================
-            tab1, tab2 = st.tabs(["📋 Care Master vs EOPS Reconciliation", "🏠 Property Dashboard"])
-
-            # TAB 1: Care Master vs EOPS Reconciliation
-            with tab1:
+            if navigation_page == "📋 Care Master vs EOPS Reconciliation":
                 st.subheader("📋 Split-Funded Care Master vs EOPS Reconciliation Table")
                 st.dataframe(final_recon, use_container_width=True)
 
-            # TAB 2: Property Dashboard
-            with tab2:
+            elif navigation_page == "🏠 Property Dashboard":
                 st.subheader("🏠 Property Dynamic Dashboard")
 
                 # Upper Dashboard Metrics
@@ -208,9 +217,11 @@ if cm_file and eops_file:
                 final_recon.to_excel(writer, sheet_name='Reconciliation', index=False)
                 property_detail_df.to_excel(writer, sheet_name='Property Dashboard', index=False)
 
-            st.download_button(
-                label="📥 Download Reconciliation & Property Report (.xlsx)",
+            st.sidebar.markdown("---")
+            st.sidebar.download_button(
+                label="📥 Download Excel Report",
                 data=buffer.getvalue(),
                 file_name="SU_Reconciliation_And_Property_Dashboard.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
             )
