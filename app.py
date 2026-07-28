@@ -80,19 +80,15 @@ with st.sidebar:
         index=0
     )
 
-# Helper function to clean SUID completely without truncation
+# Helper function to clean SUID string aggressively
 def clean_suid(series):
-    # Convert to numeric safely, then to integer string to strip any decimals like .0
-    s_numeric = pd.to_numeric(series, errors='coerce')
-    s_str = series.astype(str).str.strip()
-    
-    # Where numeric exists, format as clean integer string
-    cleaned = s_numeric.astype('Int64').astype(str)
-    # Fallback to string if not purely numeric
-    cleaned = cleaned.replace('<NA>', '').replace('nan', '')
-    
-    # Fill remaining blanks with original cleaned strings
-    return cleaned.where(cleaned != '', s_str.str.replace(r'\.0$', '', regex=True))
+    return (
+        series.astype(str)
+        .str.strip()
+        .str.replace(r'\.0$', '', regex=True)
+        .str.upper()
+        .replace(['NAN', 'NONE', '<NA>', ''], pd.NA)
+    )
 
 # ==================== 3. MAIN APPLICATION ====================
 st.title("📊 Care Master vs EOPS Reconciliation & Property Portal")
@@ -107,7 +103,7 @@ if cm_file and eops_file:
     if st.button("🚀 Process Reconciliation & Dashboard", use_container_width=True):
         with st.spinner("Processing Data..."):
             
-            # --- LOAD DATASETS --- (All columns as string initially to prevent auto-truncation)
+            # --- LOAD DATASETS ---
             df_cm = pd.read_excel(cm_file, dtype=str)
             df_eops = pd.read_excel(eops_file, dtype=str)
 
@@ -122,43 +118,42 @@ if cm_file and eops_file:
                             return col
                 return None
 
-            # 1. SUID Clean & Match (Full SUID Preservation)
-            cm_suid_col = get_col(df_cm, ['Resident Ref', 'SUID', 'SU Ref', 'Service User ID'])
-            eops_suid_col = get_col(df_eops, ['SUID', 'Resident Ref', 'SU Ref', 'Service User ID'])
+            # 1. SUID Matching
+            cm_suid_col = get_col(df_cm, ['Resident Ref', 'SUID', 'SU Ref', 'Service User ID', 'Ref'])
+            eops_suid_col = get_col(df_eops, ['SUID', 'Resident Ref', 'SU Ref', 'Service User ID', 'Ref'])
 
             if not cm_suid_col or not eops_suid_col:
-                st.error("❌ Error: SUID / Resident Ref column missing in uploaded files.")
+                st.error("❌ Error: SUID / Resident Ref column not found. Please check uploaded files.")
                 st.stop()
 
             df_cm['SUID_Clean'] = clean_suid(df_cm[cm_suid_col])
             df_eops['SUID_Clean'] = clean_suid(df_eops[eops_suid_col])
-            
-            # 2. SU Name: EOPS & CM compile
+
+            # Filter out empty SUID rows
+            df_cm = df_cm.dropna(subset=['SUID_Clean']).copy()
+            df_eops = df_eops.dropna(subset=['SUID_Clean']).copy()
+
+            # 2. Names Mapping
             fn_eops = get_col(df_eops, ['Service User Name', 'SU Name', 'First Name'])
             sn_eops = get_col(df_eops, ['SU Surname', 'Surname', 'Last Name'])
             cm_name = get_col(df_cm, ['Service User Name', 'SU Name', 'Resident Name', 'Client Name'])
 
-            df_eops['EOPS_Name'] = (df_eops[fn_eops].fillna('') if fn_eops else '') + ' ' + (df_eops[sn_eops].fillna('') if sn_eops else '')
-            df_eops['EOPS_Name'] = df_eops['EOPS_Name'].str.strip()
+            df_eops['EOPS_Name'] = ((df_eops[fn_eops].fillna('') if fn_eops else '') + ' ' + (df_eops[sn_eops].fillna('') if sn_eops else '')).str.strip()
+            df_cm['CM_Name'] = df_cm[cm_name].fillna('').astype(str).str.strip() if cm_name else ''
 
-            cm_names_dict = df_cm.groupby('SUID_Clean')[cm_name].first().to_dict() if cm_name else {}
-
-            # 3. Admission Date: EOPS mapped
+            # 3. Admission Date Mapping
             adm_eops = get_col(df_eops, ['Admission Date', 'Admit Date', 'Admission_Date'])
-            if adm_eops:
-                df_eops['Admission Date Clean'] = pd.to_datetime(df_eops[adm_eops], errors='coerce').dt.strftime('%d/%m/%Y')
-            else:
-                df_eops['Admission Date Clean'] = "N/A"
+            df_eops['Admission Date Clean'] = pd.to_datetime(df_eops[adm_eops], errors='coerce').dt.strftime('%d/%m/%Y') if adm_eops else "N/A"
 
-            # 4. Funding Authority: Council Name / Split Funding
+            # 4. Funding Authority (Council)
             fa_col = get_col(df_eops, ['FundingAuthority', 'Funding Authority', 'Council Name', 'LA Name', 'Split Funding Council'])
             df_eops['Council Name'] = df_eops[fa_col].astype(str).str.strip() if fa_col else 'N/A'
 
-            # 5. Property Address: EOPS
+            # 5. Property Address
             prop_eops = get_col(df_eops, ['Property', 'Property Address', 'Address', 'Property_Address'])
             df_eops['Property Address EOPS'] = df_eops[prop_eops].astype(str).str.strip() if prop_eops else 'N/A'
 
-            # --- EOPS BASE TABLE ---
+            # Base Tables
             eops_base = df_eops.groupby('SUID_Clean').agg({
                 'EOPS_Name': 'first',
                 'Admission Date Clean': 'first',
@@ -166,9 +161,16 @@ if cm_file and eops_file:
                 'Property Address EOPS': 'first'
             }).reset_index()
 
-            eops_base['SU Name'] = eops_base.apply(
-                lambda r: r['EOPS_Name'] if r['EOPS_Name'] != '' else cm_names_dict.get(r['SUID_Clean'], 'N/A'), axis=1
-            )
+            cm_base = df_cm.groupby('SUID_Clean').agg({
+                'CM_Name': 'first'
+            }).reset_index()
+
+            # Merge Base Info safely with outer join so NO rows are lost
+            base_info = pd.merge(eops_base, cm_base, on='SUID_Clean', how='outer')
+            base_info['SU Name'] = base_info['EOPS_Name'].fillna('').replace('', pd.NA).fillna(base_info['CM_Name']).fillna('N/A')
+            base_info['Admission Date'] = base_info['Admission Date Clean'].fillna('N/A')
+            base_info['Funding Authority'] = base_info['Council Name'].fillna('N/A')
+            base_info['Property'] = base_info['Property Address EOPS'].fillna('N/A')
 
             # --- CHARGE TYPE FILTERING & CM CALCULATIONS ---
             charge_col = get_col(df_cm, ['Charge Type'])
@@ -178,7 +180,6 @@ if cm_file and eops_file:
             rep_hrs = get_col(df_cm, ['Report Hours', 'Hours'])
             w_fee = get_col(df_cm, ['Total Weekly Fee', 'Weekly Fee', 'Fee'])
 
-            # Convert Numeric Columns for calculations
             for col in [rep_hrs, w_fee]:
                 if col:
                     df_cm[col] = pd.to_numeric(df_cm[col], errors='coerce').fillna(0)
@@ -217,8 +218,8 @@ if cm_file and eops_file:
                 'EOPS 1to1 Weekly Rate': 'sum'
             }).reset_index()
 
-            # --- MERGE ALL DATA ---
-            recon = pd.merge(eops_base, cm_core, on='SUID_Clean', how='left')
+            # --- MERGE ALL RECON DATA WITH OUTER MERGE ---
+            recon = pd.merge(base_info, cm_core, on='SUID_Clean', how='left')
             recon = pd.merge(recon, cm_1to1, on='SUID_Clean', how='left')
             recon = pd.merge(recon, eops_calc, on='SUID_Clean', how='left').fillna(0)
 
@@ -231,12 +232,7 @@ if cm_file and eops_file:
             recon['EOPS Total Weekly Rate'] = recon['EOPS Core Weekly Rate'] + recon['EOPS 1to1 Weekly Rate']
             recon['Total Rate Difference'] = recon['CM Total Weekly Rate'] - recon['EOPS Total Weekly Rate']
 
-            recon_output = recon.rename(columns={
-                'SUID_Clean': 'SUID',
-                'Admission Date Clean': 'Admission Date',
-                'Council Name': 'Funding Authority',
-                'Property Address EOPS': 'Property'
-            })
+            recon_output = recon.rename(columns={'SUID_Clean': 'SUID'})
 
             final_recon = recon_output[[
                 'SUID', 'SU Name', 'Admission Date', 'Funding Authority', 'Property',
@@ -271,12 +267,12 @@ if st.session_state.get("processed", False):
     if navigation_page == "📋 Care Master vs EOPS Reconciliation":
         st.subheader("📋 Split-Funded Care Master vs EOPS Reconciliation Table")
         
-        # Configure Table so SUID column is displayed as Text clearly without scientific notation or truncation
         st.dataframe(
             final_recon,
             use_container_width=True,
             column_config={
-                "SUID": st.column_config.TextColumn("SUID", help="Full Service User ID", width="medium")
+                "SUID": st.column_config.TextColumn("SUID", help="Full Service User ID", width="medium"),
+                "SU Name": st.column_config.TextColumn("SU Name", help="Full Service User Name", width="large")
             }
         )
 
@@ -297,7 +293,7 @@ if st.session_state.get("processed", False):
 
         st.markdown("---")
 
-        unique_props = [str(p).strip() for p in property_detail_df['Property'].dropna().unique() if str(p).strip() != ""]
+        unique_props = [str(p).strip() for p in property_detail_df['Property'].dropna().unique() if str(p).strip() != "" and str(p).strip() != "N/A"]
         property_options = ["All Properties"] + sorted(list(set(unique_props)))
 
         st.subheader("🔍 Property Search & Dynamic Slicer")
@@ -320,7 +316,8 @@ if st.session_state.get("processed", False):
             filtered_dashboard_df[display_cols],
             use_container_width=True,
             column_config={
-                "SUID": st.column_config.TextColumn("SUID", help="Full Service User ID", width="medium")
+                "SUID": st.column_config.TextColumn("SUID", help="Full Service User ID", width="medium"),
+                "SU Name": st.column_config.TextColumn("SU Name", help="Full Service User Name", width="large")
             }
         )
 
