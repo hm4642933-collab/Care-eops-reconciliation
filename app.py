@@ -63,11 +63,28 @@ if cm_file and eops_file:
                 
             df_cm = df_cm[~df_cm['Resident Ref'].astype(str).str.startswith(('BLOCK', 'Block', 'BLK'), na=False)].copy()
             df_cm['SUID_Clean'] = df_cm['Resident Ref'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
-            df_cm['Funding_Clean'] = df_cm['Inv Period Description'].astype(str).str.strip()
+            
+            # Admission Date Formatting
+            if 'Admission Date' in df_cm.columns:
+                df_cm['Admission Date Clean'] = pd.to_datetime(df_cm['Admission Date'], errors='coerce').dt.strftime('%d/%m/%Y')
+            else:
+                df_cm['Admission Date Clean'] = "N/A"
             
             df_eops['SUID_Clean'] = df_eops['SUID'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
-            df_eops['Funding_Clean'] = df_eops['FundingAuthority'].astype(str).str.strip()
+            df_eops['EOPS FundingAuthority'] = df_eops['FundingAuthority'].astype(str).str.strip()
             df_eops['EOPS Full Name'] = df_eops['Service User Name'].fillna('') + ' ' + df_eops['SU Surname'].fillna('')
+            
+            # Map Council Name when Inv Period Description is "Care Calendar Monthly", "TC Calendar Monthly", etc.
+            eops_funding_map = df_eops.groupby('SUID_Clean')['EOPS FundingAuthority'].first().to_dict()
+            
+            def get_funding_authority(row):
+                inv_desc = str(row['Inv Period Description']).strip()
+                if any(kw in inv_desc.lower() for kw in ['calendar', 'monthly', 'invoicing', 'acco']):
+                    # Fallback to EOPS Council Name if available
+                    return eops_funding_map.get(row['SUID_Clean'], inv_desc)
+                return inv_desc
+            
+            df_cm['Funding_Clean'] = df_cm.apply(get_funding_authority, axis=1)
             
             # --- EXCLUDE TC AND HB FROM CARE CALCULATIONS ---
             df_cm_care = df_cm[~df_cm['Charge Type Clean'].isin(['HB', 'TC'])].copy()
@@ -75,6 +92,7 @@ if cm_file and eops_file:
             # Care Master Aggregation by [SU ID, Funding Authority] (STAND -> Core)
             cm_grouped = df_cm_care.groupby(['SUID_Clean', 'Funding_Clean']).agg({
                 'Resident Name': 'first',
+                'Admission Date Clean': 'first',
                 'Report Hours': 'sum',
                 'Total Weekly Fee': 'sum'
             }).reset_index()
@@ -89,7 +107,7 @@ if cm_file and eops_file:
                 'Total Weekly Fee': 'sum'
             }).rename(columns={'Report Hours': 'CM 1to1 Hours', 'Total Weekly Fee': 'CM 1to1 Weekly Rate'})
             
-            cm_split = pd.merge(cm_grouped[['SUID_Clean', 'Funding_Clean', 'Resident Name']], cm_core, on=['SUID_Clean', 'Funding_Clean'], how='left')
+            cm_split = pd.merge(cm_grouped[['SUID_Clean', 'Funding_Clean', 'Resident Name', 'Admission Date Clean']], cm_core, on=['SUID_Clean', 'Funding_Clean'], how='left')
             cm_split = pd.merge(cm_split, cm_1to1, on=['SUID_Clean', 'Funding_Clean'], how='left').fillna(0)
             
             # EOPS Aggregation by [SU ID, Funding Authority]
@@ -98,22 +116,23 @@ if cm_file and eops_file:
             df_eops['EOPS 1to1 Hours'] = df_eops['Total 1:1 + PC Hours'].fillna(0)
             df_eops['EOPS 1to1 Weekly Rate'] = df_eops['Total 1:1 Weekly Charges'].fillna(0)
             
-            eops_split = df_eops.groupby(['SUID_Clean', 'Funding_Clean']).agg({
+            eops_split = df_eops.groupby(['SUID_Clean', 'EOPS FundingAuthority']).agg({
                 'EOPS Full Name': 'first',
                 'Property': 'first',
                 'EOPS Core Hours': 'sum',
                 'EOPS Core Weekly Rate': 'sum',
                 'EOPS 1to1 Hours': 'sum',
                 'EOPS 1to1 Weekly Rate': 'sum'
-            }).reset_index()
+            }).reset_index().rename(columns={'EOPS FundingAuthority': 'Funding_Clean'})
             
-            # Merge Datasets by [SU ID, Funding Authority] (Ensures separate rows for split funding)
+            # Merge Datasets by [SU ID, Funding Authority]
             merged = pd.merge(cm_split, eops_split, on=['SUID_Clean', 'Funding_Clean'], how='outer')
             
             # Header Identifiers
             merged['SU ID'] = merged['SUID_Clean']
             merged['Service User Name'] = merged['Resident Name'].combine_first(merged['EOPS Full Name'])
-            merged['Funding Authority'] = merged['Funding_Clean']
+            merged['Funding Authority (Council)'] = merged['Funding_Clean']
+            merged['Admission Date'] = merged['Admission Date Clean'].fillna("N/A")
             
             # Fill NaNs for Numerical Columns
             num_cols = ['CM Core Hours', 'CM Core Weekly Rate', 'CM 1to1 Hours', 'CM 1to1 Weekly Rate',
@@ -131,7 +150,7 @@ if cm_file and eops_file:
             
             # Reorder Final Output Columns
             final_columns = [
-                'SU ID', 'Service User Name', 'Funding Authority', 'Property',
+                'SU ID', 'Service User Name', 'Funding Authority (Council)', 'Admission Date', 'Property',
                 'CM Core Hours', 'EOPS Core Hours', 
                 'CM Core Weekly Rate', 'EOPS Core Weekly Rate',
                 'CM 1to1 Hours', 'EOPS 1to1 Hours', 
@@ -140,22 +159,33 @@ if cm_file and eops_file:
                 'CM Total Weekly Rate', 'EOPS Total Weekly Rate', 'Total Rate Diff'
             ]
             
-            final_recon = merged[final_columns].sort_values(by=['Funding Authority', 'Service User Name']).copy()
+            final_recon = merged[final_columns].sort_values(by=['Funding Authority (Council)', 'Service User Name']).copy()
             
             # --- PROPERTY DASHBOARD COMPUTATION ---
+            # Group CM Core Hours by Property via SU ID
+            su_property_map = df_eops.groupby('SUID_Clean')['Property'].first().to_dict()
+            df_cm_care['Property'] = df_cm_care['SUID_Clean'].map(su_property_map)
+            
+            cm_prop_core = df_cm_care[df_cm_care['Charge Type Clean'] == 'STAND'].groupby('Property')['Report Hours'].sum().to_dict()
+            
             property_df = df_eops.groupby('Property').agg({
                 'EOPS Core Hours': 'sum',
                 'EOPS 1to1 Hours': 'sum',
                 'SUID_Clean': 'nunique'
             }).reset_index()
             
-            property_df.columns = ['Property', 'Total Core Hours', 'Total 1:1 Hours', 'Occupied Beds']
+            property_df.columns = ['Property', 'EOPS Core Hours', 'Total 1:1 Hours', 'Occupied Beds']
+            property_df['CM Core Hours'] = property_df['Property'].map(cm_prop_core).fillna(0)
+            property_df['Core Hours Difference'] = property_df['CM Core Hours'] - property_df['EOPS Core Hours']
             
-            # Set Total Beds Capacity (Defaults to max(Occupied, 11) for full capacity)
+            # Set Total Beds Capacity
             property_df['Total Beds Capacity'] = property_df['Occupied Beds'].apply(lambda x: max(x, 11))
             property_df['Vacant Beds'] = property_df['Total Beds Capacity'] - property_df['Occupied Beds']
             
-            property_df = property_df[['Property', 'Total Core Hours', 'Total 1:1 Hours', 'Total Beds Capacity', 'Occupied Beds', 'Vacant Beds']]
+            property_df = property_df[[
+                'Property', 'Total Beds Capacity', 'Occupied Beds', 'Vacant Beds', 
+                'CM Core Hours', 'EOPS Core Hours', 'Core Hours Difference', 'Total 1:1 Hours'
+            ]]
 
             # --- DISPLAY INTERFACE & TABS ---
             tab1, tab2 = st.tabs(["📊 Split-Funding Reconciliation", "🏠 Property Dashboard"])
@@ -165,17 +195,26 @@ if cm_file and eops_file:
                 st.dataframe(final_recon, use_container_width=True)
                 
             with tab2:
-                st.subheader("🏠 Property Occupancy & Hours Dashboard")
+                st.subheader("🏠 Property Occupancy & Core Hours Dashboard")
                 
-                # --- KPI Metrics Bar ---
-                m1, m2, m3, m4, m5 = st.columns(5)
+                # KPI Metrics Bar
+                m1, m2, m3, m4, m5, m6 = st.columns(6)
                 m1.metric("Total Beds Capacity", f"{property_df['Total Beds Capacity'].sum():,}")
                 m2.metric("Occupied Beds", f"{property_df['Occupied Beds'].sum():,}")
                 m3.metric("Vacant Beds", f"{property_df['Vacant Beds'].sum():,}")
-                m4.metric("Total Core Hours", f"{property_df['Total Core Hours'].sum():,.2f}")
-                m5.metric("Total 1:1 Hours", f"{property_df['Total 1:1 Hours'].sum():,.2f}")
+                m4.metric("CM Core Hours", f"{property_df['CM Core Hours'].sum():,.2f}")
+                m5.metric("EOPS Core Hours", f"{property_df['EOPS Core Hours'].sum():,.2f}")
+                m6.metric("Core Hours Diff", f"{property_df['Core Hours Difference'].sum():,.2f}")
                 
                 st.markdown("---")
+                
+                # --- GRAPH / CHART VISUALIZATION ---
+                st.subheader("📈 Care Master vs EOPS Core Hours Comparison Chart")
+                chart_data = property_df.set_index('Property')[['CM Core Hours', 'EOPS Core Hours']]
+                st.bar_chart(chart_data, height=400)
+                
+                st.markdown("---")
+                st.subheader("📋 Property Summary Table")
                 st.dataframe(property_df, use_container_width=True)
             
             # --- EXCEL DOWNLOAD GENERATION ---
@@ -183,11 +222,9 @@ if cm_file and eops_file:
             with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
                 final_recon.to_excel(writer, sheet_name='Split Reconciliation', index=False)
                 
-                # Mismatches Sheet
                 mismatches = final_recon[(final_recon['Total Hours Diff'].abs() >= 0.01) | (final_recon['Total Rate Diff'].abs() >= 0.01)]
                 mismatches.to_excel(writer, sheet_name='Mismatches Only', index=False)
                 
-                # Property Summary Sheet
                 property_df.to_excel(writer, sheet_name='Property Dashboard', index=False)
             
             st.success("✅ Reconciliation & Property Analytics Successfully Processed!")
