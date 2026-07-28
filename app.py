@@ -292,7 +292,7 @@ if cm_file and eops_file:
           )
       )
 
-      # --- BUILD RECONCILIATION BASE ON EOPS ROWS (Keeps Split Funding rows separate) ---
+      # --- BUILD RECONCILIATION BASE ON EOPS ROWS ---
       recon = df_eops[[
           'SUID_Clean',
           'SU Name',
@@ -358,6 +358,7 @@ if cm_file and eops_file:
       property_detail_df = recon_output[[
           'SUID',
           'SU Name',
+          'Admission Date',
           'Funding Authority',
           'Property',
           'EOPS Core Hours',
@@ -400,6 +401,11 @@ if st.session_state.get('processed', False):
             ),
             'SU Name': st.column_config.TextColumn(
                 'SU Name', help='Full Service User Name', width='large'
+            ),
+            'Admission Date': st.column_config.TextColumn(
+                'Admission Date',
+                help='Service User Admission Date from EOPS',
+                width='medium',
             ),
             'Funding Authority': st.column_config.TextColumn(
                 'Funding Authority',
@@ -480,15 +486,15 @@ if st.session_state.get('processed', False):
           f'  |  **🟢 Total Vacant:** {total_vacant_beds}'
       )
 
-    # --- 4. CIRCLE GRAPH (DONUT CHART) ---
+    # --- 4. DONUT CHART (SHOWING ACTUAL TOTAL HOURS INSTEAD OF PERCENTAGE) ---
     col_chart, _ = st.columns([2, 1])
     with col_chart:
       core_sum = filtered_dashboard_df['Core Hours'].sum()
       one_to_one_sum = filtered_dashboard_df['1to1 Hours'].sum()
 
       chart_data = pd.DataFrame({
-          'Hours Type': ['Core Hours', '1to1 Hours'],
-          'Hours': [core_sum, one_to_one_sum],
+          'Hours Type': ['1to1 Hours', 'Core Hours'],
+          'Hours': [one_to_one_sum, core_sum],
       })
 
       fig_circle = px.pie(
@@ -496,9 +502,11 @@ if st.session_state.get('processed', False):
           values='Hours',
           names='Hours Type',
           hole=0.5,
-          title=f'⭕ Core vs 1to1 Hours Ratio ({selected_property})',
+          title=f'⭕ Core vs 1to1 Total Hours ({selected_property})',
           color_discrete_sequence=['#1f77b4', '#ff7f0e'],
       )
+      # Text template ko set kiya hai taake percentage ke bajaye actual hours show hon
+      fig_circle.update_traces(textinfo='value')
       st.plotly_chart(fig_circle, use_container_width=True)
 
     st.markdown('---')
@@ -508,6 +516,7 @@ if st.session_state.get('processed', False):
     display_cols = [
         'SUID',
         'SU Name',
+        'Admission Date',
         'Funding Authority',
         'Property',
         'Core Hours',
@@ -523,6 +532,11 @@ if st.session_state.get('processed', False):
             ),
             'SU Name': st.column_config.TextColumn(
                 'SU Name', help='Full Service User Name', width='large'
+            ),
+            'Admission Date': st.column_config.TextColumn(
+                'Admission Date',
+                help='Service User Admission Date from EOPS',
+                width='medium',
             ),
             'Funding Authority': st.column_config.TextColumn(
                 'Funding Authority',
