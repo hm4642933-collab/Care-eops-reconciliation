@@ -2,7 +2,27 @@ import streamlit as st
 import pandas as pd
 import io
 
-st.set_page_config(page_title="SU Reconciliation & Dynamic Property Dashboard", layout="wide")
+st.set_page_config(
+    page_title="SU Reconciliation & Property Dashboard",
+    page_icon="📊",
+    layout="wide"
+)
+
+# Custom Styling for modern Sidebar and UI
+st.markdown("""
+    <style>
+    .stSidebar {
+        background-color: #1e222d;
+    }
+    div[data-testid="stSidebarNav"] {
+        padding-top: 10px;
+    }
+    .stRadio > label {
+        font-weight: bold;
+        font-size: 16px;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
 # ==================== 1. AUTHENTICATION ====================
 USERNAME = "admin"
@@ -29,26 +49,25 @@ if not st.session_state.logged_in:
             st.error("❌ Invalid credentials")
     st.stop()
 
-# ==================== 2. SIDEBAR NAVIGATION ====================
-# Sidebar Menu (Log Out ke niche Tabs)
+# ==================== 2. BEAUTIFUL SIDEBAR NAVIGATION ====================
 with st.sidebar:
-    st.title("📌 Navigation Menu")
+    st.markdown("### 🏢 **Portal Menu**")
     
-    # 1. Log Out Button at Top
+    # Clean styled Navigation Buttons
+    navigation_page = st.radio(
+        "Select Section:",
+        ["📋 Care Master vs EOPS Reconciliation", "🏠 Property Dashboard"],
+        index=0
+    )
+    
+    st.markdown("---")
+    
     if st.button("🚪 Log Out", use_container_width=True):
         st.session_state.logged_in = False
         st.rerun()
-        
-    st.markdown("---")
-    
-    # 2. Sidebar Tabs (Log Out Ke Niche Navigation Tabs)
-    navigation_page = st.radio(
-        "Select Tab / Page:",
-        ["📋 Care Master vs EOPS Reconciliation", "🏠 Property Dashboard"]
-    )
 
 # ==================== 3. MAIN APPLICATION ====================
-st.title("📊 SU Reconciliation & Dynamic Property Portal")
+st.title("📊 Care Master vs EOPS Reconciliation & Property Portal")
 
 col1, col2 = st.columns(2)
 with col1:
@@ -57,7 +76,7 @@ with col2:
     eops_file = st.file_uploader("Upload EOPS File (.xlsx)", type=["xlsx", "xls"])
 
 if cm_file and eops_file:
-    if st.button("🚀 Process Reconciliation & Dashboard"):
+    if st.button("🚀 Process Reconciliation & Dashboard", use_container_width=True):
         with st.spinner("Processing Data..."):
             
             # --- LOAD DATASETS ---
@@ -68,24 +87,47 @@ if cm_file and eops_file:
             df_cm.columns = [str(c).strip() for c in df_cm.columns]
             df_eops.columns = [str(c).strip() for c in df_eops.columns]
             
+            # Helper Function to find column safely
+            def get_col(df, possible_names):
+                for name in possible_names:
+                    for col in df.columns:
+                        if col.lower().strip() == name.lower().strip():
+                            return col
+                return None
+
+            # Safe SUID Column Matching
+            cm_suid_col = get_col(df_cm, ['Resident Ref', 'SUID', 'SU Ref', 'Service User ID'])
+            eops_suid_col = get_col(df_eops, ['SUID', 'Resident Ref', 'SU Ref', 'Service User ID'])
+
+            if not cm_suid_col or not eops_suid_col:
+                st.error("❌ Error: Could not automatically detect SUID / Resident Ref column in uploaded files.")
+                st.stop()
+
             # SUID Normalization
-            df_cm['SUID_Clean'] = df_cm['Resident Ref'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
-            df_eops['SUID_Clean'] = df_eops['SUID'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
+            df_cm['SUID_Clean'] = df_cm[cm_suid_col].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
+            df_eops['SUID_Clean'] = df_eops[eops_suid_col].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
             
             # Clean Charge Types
-            df_cm['Charge Type Clean'] = df_cm['Charge Type'].astype(str).str.strip().str.upper() if 'Charge Type' in df_cm.columns else ""
-            df_cm = df_cm[~df_cm['Resident Ref'].astype(str).str.startswith(('BLOCK', 'Block', 'BLK'), na=False)].copy()
+            charge_col = get_col(df_cm, ['Charge Type'])
+            df_cm['Charge Type Clean'] = df_cm[charge_col].astype(str).str.strip().str.upper() if charge_col else ""
+            df_cm = df_cm[~df_cm[cm_suid_col].astype(str).str.startswith(('BLOCK', 'Block', 'BLK'), na=False)].copy()
             
             # Admission Date
-            if 'Admission Date' in df_cm.columns:
-                df_cm['Admission Date Clean'] = pd.to_datetime(df_cm['Admission Date'], errors='coerce').dt.strftime('%d/%m/%Y')
+            adm_col = get_col(df_cm, ['Admission Date'])
+            if adm_col:
+                df_cm['Admission Date Clean'] = pd.to_datetime(df_cm[adm_col], errors='coerce').dt.strftime('%d/%m/%Y')
             else:
                 df_cm['Admission Date Clean'] = "N/A"
 
-            # EOPS Base Columns
-            df_eops['EOPS Full Name'] = df_eops['Service User Name'].fillna('') + ' ' + df_eops['SU Surname'].fillna('')
-            df_eops['EOPS FundingAuthority'] = df_eops['FundingAuthority'].astype(str).str.strip()
-            df_eops['EOPS Property'] = df_eops['Property'].astype(str).str.strip()
+            # EOPS Base Columns Safely Mapped
+            fn_col = get_col(df_eops, ['Service User Name', 'SU Name', 'First Name'])
+            sn_col = get_col(df_eops, ['SU Surname', 'Surname', 'Last Name'])
+            fa_col = get_col(df_eops, ['FundingAuthority', 'Funding Authority', 'LA Name'])
+            pr_col = get_col(df_eops, ['Property', 'Property Address', 'Address'])
+
+            df_eops['EOPS Full Name'] = (df_eops[fn_col].fillna('') if fn_col else '') + ' ' + (df_eops[sn_col].fillna('') if sn_col else '')
+            df_eops['EOPS FundingAuthority'] = df_eops[fa_col].astype(str).str.strip() if fa_col else 'N/A'
+            df_eops['EOPS Property'] = df_eops[pr_col].astype(str).str.strip() if pr_col else 'N/A'
             
             eops_base = df_eops.groupby('SUID_Clean').agg({
                 'EOPS Full Name': 'first',
@@ -97,21 +139,31 @@ if cm_file and eops_file:
             eops_base['Admission Date'] = eops_base['SUID_Clean'].map(cm_dates).fillna("N/A")
 
             # --- CM CALCULATIONS ---
+            rep_hrs = get_col(df_cm, ['Report Hours', 'Hours'])
+            w_fee = get_col(df_cm, ['Total Weekly Fee', 'Weekly Fee', 'Fee'])
+
             cm_core = df_cm[df_cm['Charge Type Clean'].isin(['STAND', 'DIRECT MANAGEMENT', 'DIRECT MANAGEMENT ON SITE'])].groupby('SUID_Clean').agg({
-                'Report Hours': 'sum',
-                'Total Weekly Fee': 'sum'
-            }).rename(columns={'Report Hours': 'CM Core Hours', 'Total Weekly Fee': 'CM Core Weekly Rate'})
+                rep_hrs: 'sum' if rep_hrs else lambda x: 0,
+                w_fee: 'sum' if w_fee else lambda x: 0
+            }).rename(columns={rep_hrs: 'CM Core Hours', w_fee: 'CM Core Weekly Rate'})
 
             cm_1to1 = df_cm[df_cm['Charge Type Clean'].isin(['1TO1', 'PC', 'PERSONAL CARE'])].groupby('SUID_Clean').agg({
-                'Report Hours': 'sum',
-                'Total Weekly Fee': 'sum'
-            }).rename(columns={'Report Hours': 'CM 1to1 Hours', 'Total Weekly Fee': 'CM 1to1 Weekly Rate'})
+                rep_hrs: 'sum' if rep_hrs else lambda x: 0,
+                w_fee: 'sum' if w_fee else lambda x: 0
+            }).rename(columns={rep_hrs: 'CM 1to1 Hours', w_fee: 'CM 1to1 Weekly Rate'})
 
             # --- EOPS CALCULATIONS ---
-            df_eops['EOPS Core Hours'] = df_eops['Core Hours'].fillna(0) + df_eops['Direct Management On Site Hours'].fillna(0)
-            df_eops['EOPS Core Weekly Rate'] = df_eops['Core Weekly Charges'].fillna(0) + df_eops['Direct Management On Site Weekly Charges'].fillna(0)
-            df_eops['EOPS 1to1 Hours'] = df_eops['Total 1:1 + PC Hours'].fillna(0)
-            df_eops['EOPS 1to1 Weekly Rate'] = df_eops['Total 1:1 Weekly Charges'].fillna(0)
+            core_h = get_col(df_eops, ['Core Hours'])
+            dm_h = get_col(df_eops, ['Direct Management On Site Hours'])
+            core_c = get_col(df_eops, ['Core Weekly Charges'])
+            dm_c = get_col(df_eops, ['Direct Management On Site Weekly Charges'])
+            one_h = get_col(df_eops, ['Total 1:1 + PC Hours', '1to1 Hours'])
+            one_c = get_col(df_eops, ['Total 1:1 Weekly Charges', '1to1 Charges'])
+
+            df_eops['EOPS Core Hours'] = (df_eops[core_h].fillna(0) if core_h else 0) + (df_eops[dm_h].fillna(0) if dm_h else 0)
+            df_eops['EOPS Core Weekly Rate'] = (df_eops[core_c].fillna(0) if core_c else 0) + (df_eops[dm_c].fillna(0) if dm_c else 0)
+            df_eops['EOPS 1to1 Hours'] = df_eops[one_h].fillna(0) if one_h else 0
+            df_eops['EOPS 1to1 Weekly Rate'] = df_eops[one_c].fillna(0) if one_c else 0
 
             eops_calc = df_eops.groupby('SUID_Clean').agg({
                 'EOPS Core Hours': 'sum',
@@ -162,66 +214,73 @@ if cm_file and eops_file:
 
             property_detail_df['Total Hours'] = property_detail_df['Core Hours'] + property_detail_df['1to1 Hours']
 
-            # =========================================================
-            # 🔄 NAVIGATION ROUTING BASED ON SIDEBAR SELECTION
-            # =========================================================
-            if navigation_page == "📋 Care Master vs EOPS Reconciliation":
-                st.subheader("📋 Split-Funded Care Master vs EOPS Reconciliation Table")
-                st.dataframe(final_recon, use_container_width=True)
+            # Save in session state for tab switching without reloading
+            st.session_state.processed = True
+            st.session_state.final_recon = final_recon
+            st.session_state.property_detail_df = property_detail_df
 
-            elif navigation_page == "🏠 Property Dashboard":
-                st.subheader("🏠 Property Dynamic Dashboard")
+# Display Content Based on Selected Navigation Menu
+if st.session_state.get("processed", False):
+    final_recon = st.session_state.final_recon
+    property_detail_df = st.session_state.property_detail_df
 
-                # Upper Dashboard Metrics
-                FIXED_TOTAL_BEDS = 539
-                total_occupied_su = property_detail_df['SUID'].nunique()
-                vacancies_diff = FIXED_TOTAL_BEDS - total_occupied_su
+    if navigation_page == "📋 Care Master vs EOPS Reconciliation":
+        st.subheader("📋 Split-Funded Care Master vs EOPS Reconciliation Table")
+        st.dataframe(final_recon, use_container_width=True)
 
-                m1, m2, m3, m4, m5, m6 = st.columns(6)
-                m1.metric("Total Beds", f"{FIXED_TOTAL_BEDS:,}")
-                m2.metric("Occupied Beds (EOPS)", f"{total_occupied_su:,}")
-                m3.metric("Vacancies Difference", f"{vacancies_diff:,}")
-                m4.metric("EOPS Core Hours", f"{property_detail_df['Core Hours'].sum():,.2f}")
-                m5.metric("EOPS 1to1 Hours", f"{property_detail_df['1to1 Hours'].sum():,.2f}")
-                m6.metric("Total EOPS Hours", f"{property_detail_df['Total Hours'].sum():,.2f}")
+    elif navigation_page == "🏠 Property Dashboard":
+        st.subheader("🏠 Property Dynamic Dashboard")
 
-                st.markdown("---")
+        # Upper Metrics Cards
+        FIXED_TOTAL_BEDS = 539
+        total_occupied_su = property_detail_df['SUID'].nunique()
+        vacancies_diff = FIXED_TOTAL_BEDS - total_occupied_su
 
-                # Searchable Slicer & Filter
-                unique_props = [str(p).strip() for p in property_detail_df['Property'].dropna().unique() if str(p).strip() != ""]
-                property_options = ["All Properties"] + sorted(list(set(unique_props)))
+        m1, m2, m3, m4, m5, m6 = st.columns(6)
+        m1.metric("Total Beds", f"{FIXED_TOTAL_BEDS:,}")
+        m2.metric("Occupied Beds (EOPS)", f"{total_occupied_su:,}")
+        m3.metric("Vacancies Difference", f"{vacancies_diff:,}")
+        m4.metric("EOPS Core Hours", f"{property_detail_df['Core Hours'].sum():,.2f}")
+        m5.metric("EOPS 1to1 Hours", f"{property_detail_df['1to1 Hours'].sum():,.2f}")
+        m6.metric("Total EOPS Hours", f"{property_detail_df['Total Hours'].sum():,.2f}")
 
-                st.subheader("🔍 Property Search & Slicer")
-                selected_property = st.selectbox("Search / Select Property to View Data & Graph:", property_options)
+        st.markdown("---")
 
-                if selected_property != "All Properties":
-                    filtered_dashboard_df = property_detail_df[property_detail_df['Property'].astype(str) == selected_property]
-                else:
-                    filtered_dashboard_df = property_detail_df
+        # Search Slicer
+        unique_props = [str(p).strip() for p in property_detail_df['Property'].dropna().unique() if str(p).strip() != ""]
+        property_options = ["All Properties"] + sorted(list(set(unique_props)))
 
-                # Visual Graph Slicer Chart
-                st.subheader("📈 Hours Breakdown Chart")
-                chart_data = filtered_dashboard_df.groupby('Property')[['Core Hours', '1to1 Hours', 'Total Hours']].sum()
-                st.bar_chart(chart_data)
+        st.subheader("🔍 Property Search & Interactive Slicer")
+        selected_property = st.selectbox("Search or Select Property to Filter:", property_options)
 
-                st.markdown("---")
+        if selected_property != "All Properties":
+            filtered_dashboard_df = property_detail_df[property_detail_df['Property'].astype(str) == selected_property]
+        else:
+            filtered_dashboard_df = property_detail_df
 
-                # Property SUID Table
-                st.subheader(f"📋 Property Service User Details - [{selected_property}]")
-                display_cols = ['SUID', 'SU Name', 'Funding Authority', 'Property', 'Core Hours', '1to1 Hours', 'Total Hours']
-                st.dataframe(filtered_dashboard_df[display_cols], use_container_width=True)
+        # Visual Chart
+        st.subheader("📈 Hours Breakdown Chart")
+        chart_data = filtered_dashboard_df.groupby('Property')[['Core Hours', '1to1 Hours', 'Total Hours']].sum()
+        st.bar_chart(chart_data)
 
-            # --- EXCEL DOWNLOAD ---
-            buffer = io.BytesIO()
-            with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-                final_recon.to_excel(writer, sheet_name='Reconciliation', index=False)
-                property_detail_df.to_excel(writer, sheet_name='Property Dashboard', index=False)
+        st.markdown("---")
 
-            st.sidebar.markdown("---")
-            st.sidebar.download_button(
-                label="📥 Download Excel Report",
-                data=buffer.getvalue(),
-                file_name="SU_Reconciliation_And_Property_Dashboard.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True
-            )
+        # Property Table
+        st.subheader(f"📋 Service User Details - [{selected_property}]")
+        display_cols = ['SUID', 'SU Name', 'Funding Authority', 'Property', 'Core Hours', '1to1 Hours', 'Total Hours']
+        st.dataframe(filtered_dashboard_df[display_cols], use_container_width=True)
+
+    # Excel Download Button in Sidebar
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+        final_recon.to_excel(writer, sheet_name='Reconciliation', index=False)
+        property_detail_df.to_excel(writer, sheet_name='Property Dashboard', index=False)
+
+    st.sidebar.markdown("---")
+    st.sidebar.download_button(
+        label="📥 Download Excel Report",
+        data=buffer.getvalue(),
+        file_name="SU_Reconciliation_And_Property_Dashboard.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True
+    )
