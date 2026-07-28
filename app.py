@@ -68,7 +68,7 @@ if cm_file and eops_file:
             else:
                 df_cm['Admission Date Clean'] = "N/A"
 
-            # EOPS Base Columns (Mandatory mapped fields)
+            # EOPS Base Columns
             df_eops['EOPS Full Name'] = df_eops['Service User Name'].fillna('') + ' ' + df_eops['SU Surname'].fillna('')
             df_eops['EOPS FundingAuthority'] = df_eops['FundingAuthority'].astype(str).str.strip()
             df_eops['EOPS Property'] = df_eops['Property'].astype(str).str.strip()
@@ -82,7 +82,7 @@ if cm_file and eops_file:
             cm_dates = df_cm.groupby('SUID_Clean')['Admission Date Clean'].first().to_dict()
             eops_base['Admission Date'] = eops_base['SUID_Clean'].map(cm_dates).fillna("N/A")
 
-            # --- CM CALCULATIONS (Core includes Direct Management, 1to1 includes PC) ---
+            # --- CM CALCULATIONS ---
             cm_core = df_cm[df_cm['Charge Type Clean'].isin(['STAND', 'DIRECT MANAGEMENT', 'DIRECT MANAGEMENT ON SITE'])].groupby('SUID_Clean').agg({
                 'Report Hours': 'sum',
                 'Total Weekly Fee': 'sum'
@@ -146,7 +146,6 @@ if cm_file and eops_file:
                 'EOPS 1to1 Hours': '1to1 Hours'
             }, inplace=True)
 
-            # Total Hours Calculation
             property_detail_df['Total Hours'] = property_detail_df['Core Hours'] + property_detail_df['1to1 Hours']
 
             # --- RENDER TABS ---
@@ -159,21 +158,25 @@ if cm_file and eops_file:
             with tab2:
                 st.subheader("🏠 Property Dynamic Dashboard & SUID Breakdown")
 
-                # PROPERTY SLICER / DROPDOWN
-                property_options = ["All Properties"] + sorted(list(property_detail_df['Property'].dropna().unique()))
+                # =========================================================
+                # 🛠️ FIXED SECTION (Prevents TypeError on sorting)
+                # =========================================================
+                unique_props = [str(p).strip() for p in property_detail_df['Property'].dropna().unique() if str(p).strip() != ""]
+                property_options = ["All Properties"] + sorted(list(set(unique_props)))
+
                 selected_property = st.selectbox("📌 Select Property Address to filter Dashboard Data:", property_options)
 
-                # Filter Dataset Based on Selected Property
                 if selected_property != "All Properties":
-                    filtered_dashboard_df = property_detail_df[property_detail_df['Property'] == selected_property]
+                    filtered_dashboard_df = property_detail_df[property_detail_df['Property'].astype(str) == selected_property]
                 else:
                     filtered_dashboard_df = property_detail_df
+                # =========================================================
 
                 # KPI Calculations
                 FIXED_TOTAL_BEDS = 539
                 occupied_beds = filtered_dashboard_df['SUID'].nunique()
                 vacancies = FIXED_TOTAL_BEDS - occupied_beds
-                vacancies_diff = vacancies  # Difference
+                vacancies_diff = vacancies
 
                 # METRICS DISPLAY
                 m1, m2, m3, m4, m5, m6 = st.columns(6)
@@ -186,11 +189,8 @@ if cm_file and eops_file:
 
                 st.markdown("---")
 
-                # DYNAMIC DATA TABLE (EXACT REQUESTED COLUMNS)
+                # DYNAMIC DATA TABLE
                 st.subheader(f"📋 Service User Details - [{selected_property}]")
-                st.write("Columns: **SUID | SU Name | Funding Authority | Property | Core Hours | 1to1 Hours | Total Hours**")
-                
-                # Column Display Order
                 display_cols = ['SUID', 'SU Name', 'Funding Authority', 'Property', 'Core Hours', '1to1 Hours', 'Total Hours']
                 st.dataframe(filtered_dashboard_df[display_cols], use_container_width=True)
 
