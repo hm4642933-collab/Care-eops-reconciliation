@@ -1,5 +1,3 @@
-import base64
-import io
 import pandas as pd
 import plotly.express as px
 import streamlit as st
@@ -32,6 +30,25 @@ st.markdown(
     }
     .stSidebar {
         background-color: #1e222d;
+    }
+    .brand-box {
+        background: linear-gradient(135deg, #17a2b8, #117a8b);
+        padding: 15px;
+        border-radius: 8px;
+        text-align: center;
+        color: white;
+        margin-bottom: 15px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    .brand-title {
+        font-size: 18px;
+        font-weight: 700;
+        margin: 0;
+    }
+    .brand-sub {
+        font-size: 12px;
+        opacity: 0.9;
+        margin: 2px 0 0 0;
     }
     </style>
 """,
@@ -68,30 +85,26 @@ if not st.session_state.logged_in:
 
 # ==================== 3. SIDEBAR NAVIGATION ====================
 with st.sidebar:
-  # --- COMFORT CARE SERVICES LOGO EMBED (BASE64) ---
-  try:
-    with open("logo.png", "rb") as image_file:
-      encoded_string = base64.b64encode(image_file.read()).decode()
-    st.markdown(
-        f"""
-            <div style="text-align: center; margin-bottom: 15px; background-color: #ffffff; padding: 10px; border-radius: 8px;">
-                <img src="data:image/png;base64,{encoded_string}" width="100%">
-            </div>
-        """,
-        unsafe_allow_html=True,
-    )
-  except FileNotFoundError:
-    st.warning("⚠️ 'logo.png' file not found in directory.")
+  # Professional Brand Header (No image required)
+  st.markdown(
+      """
+        <div class="brand-box">
+            <div style="font-size: 24px; margin-bottom: 3px;">🏢</div>
+            <p class="brand-title">Comfort Care Services</p>
+            <p class="brand-sub">Management Portal</p>
+        </div>
+    """,
+      unsafe_allow_html=True,
+  )
 
-  st.markdown("---")
-  st.markdown("### 🏢 **Portal Menu**")
+  st.markdown("### 📌 **Portal Menu**")
 
   if st.button("🚪 Log Out", use_container_width=True):
     st.session_state.logged_in = False
     st.rerun()
 
   st.markdown("---")
-  st.markdown("### 📌 **Select Section / Tab:**")
+  st.markdown("### **Select Section / Tab:**")
 
   if "navigation_page" not in st.session_state:
     st.session_state.navigation_page = "📋 Care Master vs EOPS Reconciliation"
