@@ -1,3 +1,4 @@
+import base64
 import io
 import pandas as pd
 import plotly.express as px
@@ -67,12 +68,21 @@ if not st.session_state.logged_in:
 
 # ==================== 3. SIDEBAR NAVIGATION ====================
 with st.sidebar:
-  # Comfort Care Services Logo Integration (Corrected Logo)
-  st.image(
-      "https://images.unsplash.com/photo-1599305445671-ac291c95aaa9?w=300",
-      use_column_width=True,
-  )
-  st.markdown("### 🏢 **Comfort Care Services**")
+  # --- COMFORT CARE SERVICES LOGO EMBED (BASE64) ---
+  try:
+    with open("logo.png", "rb") as image_file:
+      encoded_string = base64.b64encode(image_file.read()).decode()
+    st.markdown(
+        f"""
+            <div style="text-align: center; margin-bottom: 15px; background-color: #ffffff; padding: 10px; border-radius: 8px;">
+                <img src="data:image/png;base64,{encoded_string}" width="100%">
+            </div>
+        """,
+        unsafe_allow_html=True,
+    )
+  except FileNotFoundError:
+    st.warning("⚠️ 'logo.png' file not found in directory.")
+
   st.markdown("---")
   st.markdown("### 🏢 **Portal Menu**")
 
