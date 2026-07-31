@@ -206,17 +206,29 @@ if cm_file and eops_file:
       ).str.strip()
       df_eops["SU Name"] = df_eops["EOPS_Name"].replace("", "N/A").fillna("N/A")
 
+      # Improved Admission Date Handling
       adm_eops = get_col(
-          df_eops, ["Admission Date", "Admit Date", "Admission_Date"]
+          df_eops,
+          [
+              "Admission Date",
+              "Admit Date",
+              "Admission_Date",
+              "Start Date",
+              "StartDate",
+          ],
       )
-      df_eops["Admission Date"] = (
-          pd.to_datetime(df_eops[adm_eops], errors="coerce").dt.strftime(
-              "%d/%m/%Y"
-          )
-          if adm_eops
-          else "N/A"
-      )
-      df_eops["Admission Date"] = df_eops["Admission Date"].fillna("N/A")
+      if adm_eops:
+        parsed_dates = pd.to_datetime(df_eops[adm_eops], errors="coerce")
+        df_eops["Admission Date"] = parsed_dates.dt.strftime("%d/%m/%Y")
+        # Fallback for text-based dates if datetime conversion fails for some rows
+        df_eops["Admission Date"] = df_eops["Admission Date"].fillna(
+            df_eops[adm_eops].astype(str).str.strip()
+        )
+        df_eops["Admission Date"] = df_eops["Admission Date"].replace(
+            ["nan", "NAT", "NaT", ""], "N/A"
+        )
+      else:
+        df_eops["Admission Date"] = "N/A"
 
       fa_col = get_col(
           df_eops,
@@ -494,7 +506,7 @@ if st.session_state.get("processed", False):
 
     st.dataframe(filtered_dashboard_df, use_container_width=True)
 
-    # Separate Download Button for Property Dashboard Tab (downloads filtered or full table)
+    # Separate Download Button for Property Dashboard Tab
     prop_excel = to_excel_bytes(filtered_dashboard_df)
     st.download_button(
         label=(
