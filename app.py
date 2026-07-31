@@ -1,3 +1,4 @@
+import io
 import pandas as pd
 import plotly.express as px
 import streamlit as st
@@ -45,11 +46,6 @@ st.markdown(
         font-weight: 700;
         margin: 0;
     }
-    .brand-sub {
-        font-size: 12px;
-        opacity: 0.9;
-        margin: 2px 0 0 0;
-    }
     </style>
 """,
     unsafe_allow_html=True,
@@ -85,13 +81,13 @@ if not st.session_state.logged_in:
 
 # ==================== 3. SIDEBAR NAVIGATION ====================
 with st.sidebar:
-  # Professional Brand Header (No image required)
+  # Professional Brand Header
   st.markdown(
       """
         <div class="brand-box">
             <div style="font-size: 24px; margin-bottom: 3px;">🏢</div>
             <p class="brand-title">Comfort Care Services</p>
-            <p class="brand-sub">Management Portal</p>
+            <div style="font-size: 13px; opacity: 0.9; margin-top: 2px;">Portal</div>
         </div>
     """,
       unsafe_allow_html=True,
@@ -133,6 +129,15 @@ def clean_suid(series):
       .str.upper()
       .replace(["NAN", "NONE", "<NA>", ""], pd.NA)
   )
+
+
+# Helper function to convert dataframe to Excel bytes for downloading
+def to_excel_bytes(df):
+  output = io.BytesIO()
+  with pd.ExcelWriter(output, engine="openpyxl") as writer:
+    df.to_excel(writer, index=False, sheet_name="Sheet1")
+  processed_data = output.getvalue()
+  return processed_data
 
 
 # ==================== 4. MAIN APPLICATION ====================
@@ -384,7 +389,10 @@ if cm_file and eops_file:
           "CM Total Weekly Rate",
           "EOPS Total Weekly Rate",
           "Total Rate Difference",
-      ]]
+      ]].copy()
+
+      # Add Serial Number starting from 1 in the first column
+      final_recon.insert(0, "S.No", range(1, len(final_recon) + 1))
 
       property_detail_df = recon_output[[
           "SUID",
@@ -407,6 +415,7 @@ if cm_file and eops_file:
       property_detail_df["Total Hours"] = (
           property_detail_df["Core Hours"] + property_detail_df["1to1 Hours"]
       )
+      property_detail_df.insert(0, "S.No", range(1, len(property_detail_df) + 1))
 
       st.session_state.processed = True
       st.session_state.final_recon = final_recon
@@ -419,6 +428,15 @@ if st.session_state.get("processed", False):
   if navigation_page == "📋 Care Master vs EOPS Reconciliation":
     st.subheader("📋 Care Master vs EOPS Reconciliation Table")
     st.dataframe(final_recon, use_container_width=True)
+
+    # Separate Download Button for Reconciliation Tab
+    recon_excel = to_excel_bytes(final_recon)
+    st.download_button(
+        label="📥 Download Care Master vs EOPS Reconciliation Excel",
+        data=recon_excel,
+        file_name="CareMaster_vs_EOPS_Reconciliation.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 
   elif navigation_page == "🏠 Property Dashboard":
     st.subheader("🏠 Property Dynamic Dashboard")
@@ -475,3 +493,18 @@ if st.session_state.get("processed", False):
       st.plotly_chart(fig_circle, use_container_width=True)
 
     st.dataframe(filtered_dashboard_df, use_container_width=True)
+
+    # Separate Download Button for Property Dashboard Tab (downloads filtered or full table)
+    prop_excel = to_excel_bytes(filtered_dashboard_df)
+    st.download_button(
+        label=(
+            "📥 Download Property Dashboard Report Excel"
+            f" ({selected_property})"
+        ),
+        data=prop_excel,
+        file_name=(
+            "Property_Dashboard_Report_"
+            f"{selected_property.replace(' ', '_')}.xlsx"
+        ),
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
