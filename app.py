@@ -51,16 +51,19 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# ==================== 1. CONSTANTS ====================
 TOTAL_FIXED_BEDS = 485
 
-# ==================== 2. AUTHENTICATION ====================
-USERNAME = "admin"
-PASSWORD = "password123"
-
+# Initialize Session States safely
 if "logged_in" not in st.session_state:
   st.session_state.logged_in = False
 
+if "navigation_page" not in st.session_state:
+  st.session_state.navigation_page = "📋 Care Master vs EOPS Reconciliation"
+
+if "processed" not in st.session_state:
+  st.session_state.processed = False
+
+# Authentication Portal
 if not st.session_state.logged_in:
   st.title("🔒 Access Login Portal")
   st.write("Please log in to access the Reconciliation & Property Dashboard.")
@@ -72,14 +75,14 @@ if not st.session_state.logged_in:
     p = st.text_input("Password", type="password")
 
   if st.button("Log In"):
-    if u == USERNAME and p == PASSWORD:
+    if u == "admin" and p == "password123":
       st.session_state.logged_in = True
       st.rerun()
     else:
       st.error("❌ Invalid credentials")
   st.stop()
 
-# ==================== 3. SIDEBAR NAVIGATION ====================
+# Sidebar Navigation
 with st.sidebar:
   st.markdown(
       """
@@ -100,9 +103,6 @@ with st.sidebar:
 
   st.markdown("---")
   st.markdown("### **Select Section / Tab:**")
-
-  if "navigation_page" not in st.session_state:
-    st.session_state.navigation_page = "📋 Care Master vs EOPS Reconciliation"
 
   if st.button(
       "📋 Care Master vs EOPS Reconciliation",
@@ -136,7 +136,7 @@ def to_excel_bytes(df):
   return output.getvalue()
 
 
-# ==================== 4. MAIN APPLICATION ====================
+# Main Application
 st.title("📊 Care Master vs EOPS Reconciliation & Property Portal")
 
 col1, col2 = st.columns(2)
@@ -431,87 +431,90 @@ if cm_file and eops_file:
       st.error(f"❌ An error occurred during processing: {e}")
 
 if st.session_state.get("processed", False):
-  final_recon = st.session_state.final_recon
-  property_detail_df = st.session_state.property_detail_df
+  try:
+    final_recon = st.session_state.final_recon
+    property_detail_df = st.session_state.property_detail_df
 
-  if navigation_page == "📋 Care Master vs EOPS Reconciliation":
-    st.subheader("📋 Care Master vs EOPS Reconciliation Table")
-    st.dataframe(final_recon, use_container_width=True)
+    if st.session_state.navigation_page == "📋 Care Master vs EOPS Reconciliation":
+      st.subheader("📋 Care Master vs EOPS Reconciliation Table")
+      st.dataframe(final_recon, use_container_width=True)
 
-    recon_excel = to_excel_bytes(final_recon)
-    st.download_button(
-        label="📥 Download Care Master vs EOPS Reconciliation Excel",
-        data=recon_excel,
-        file_name="CareMaster_vs_EOPS_Reconciliation.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
-
-  elif navigation_page == "🏠 Property Dashboard":
-    st.subheader("🏠 Property Dynamic Dashboard")
-
-    total_occupied_eops = property_detail_df["SUID"].nunique()
-    total_vacant_beds = max(0, TOTAL_FIXED_BEDS - total_occupied_eops)
-    overall_occupancy_pct = (total_occupied_eops / TOTAL_FIXED_BEDS) * 100
-
-    b1, b2, b3, b4 = st.columns(4)
-    b1.metric("🛏️ Total Beds (Fixed)", f"{TOTAL_FIXED_BEDS:,}")
-    b2.metric("👥 Occupied Beds (EOPS)", f"{total_occupied_eops:,}")
-    b3.metric("🟢 Vacant Beds", f"{total_vacant_beds:,}")
-    b4.metric("📊 Occupancy Rate", f"{overall_occupancy_pct:.1f}%")
-
-    st.markdown("---")
-
-    unique_props = [
-        str(p).strip()
-        for p in property_detail_df["Property"].dropna().unique()
-        if str(p).strip() != "" and str(p).strip() != "N/A"
-    ]
-    property_options = ["All Properties"] + sorted(list(set(unique_props)))
-
-    selected_property = st.selectbox(
-        "Search or Select Property:", property_options
-    )
-
-    if selected_property != "All Properties":
-      filtered_dashboard_df = property_detail_df[
-          property_detail_df["Property"].astype(str) == selected_property
-      ]
-    else:
-      filtered_dashboard_df = property_detail_df
-
-    col_chart, _ = st.columns([2, 1])
-    with col_chart:
-      core_sum = filtered_dashboard_df["Core Hours"].sum()
-      one_to_one_sum = filtered_dashboard_df["1to1 Hours"].sum()
-
-      chart_data = pd.DataFrame({
-          "Hours Type": ["1to1 Hours", "Core Hours"],
-          "Hours": [one_to_one_sum, core_sum],
-      })
-
-      fig_circle = px.pie(
-          chart_data,
-          values="Hours",
-          names="Hours Type",
-          hole=0.5,
-          title=f"⭕ Core vs 1to1 Total Hours ({selected_property})",
-          color_discrete_sequence=["#1f77b4", "#ff7f0e"],
+      recon_excel = to_excel_bytes(final_recon)
+      st.download_button(
+          label="📥 Download Care Master vs EOPS Reconciliation Excel",
+          data=recon_excel,
+          file_name="CareMaster_vs_EOPS_Reconciliation.xlsx",
+          mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       )
-      fig_circle.update_traces(textinfo="value")
-      st.plotly_chart(fig_circle, use_container_width=True)
 
-    st.dataframe(filtered_dashboard_df, use_container_width=True)
+    elif st.session_state.navigation_page == "🏠 Property Dashboard":
+      st.subheader("🏠 Property Dynamic Dashboard")
 
-    prop_excel = to_excel_bytes(filtered_dashboard_df)
-    st.download_button(
-        label=(
-            "📥 Download Property Dashboard Report Excel"
-            f" ({selected_property})"
-        ),
-        data=prop_excel,
-        file_name=(
-            "Property_Dashboard_Report_"
-            f"{selected_property.replace(' ', '_')}.xlsx"
-        ),
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
+      total_occupied_eops = property_detail_df["SUID"].nunique()
+      total_vacant_beds = max(0, TOTAL_FIXED_BEDS - total_occupied_eops)
+      overall_occupancy_pct = (total_occupied_eops / TOTAL_FIXED_BEDS) * 100
+
+      b1, b2, b3, b4 = st.columns(4)
+      b1.metric("🛏️ Total Beds (Fixed)", f"{TOTAL_FIXED_BEDS:,}")
+      b2.metric("👥 Occupied Beds (EOPS)", f"{total_occupied_eops:,}")
+      b3.metric("🟢 Vacant Beds", f"{total_vacant_beds:,}")
+      b4.metric("📊 Occupancy Rate", f"{overall_occupancy_pct:.1f}%")
+
+      st.markdown("---")
+
+      unique_props = [
+          str(p).strip()
+          for p in property_detail_df["Property"].dropna().unique()
+          if str(p).strip() != "" and str(p).strip() != "N/A"
+      ]
+      property_options = ["All Properties"] + sorted(list(set(unique_props)))
+
+      selected_property = st.selectbox(
+          "Search or Select Property:", property_options
+      )
+
+      if selected_property != "All Properties":
+        filtered_dashboard_df = property_detail_df[
+            property_detail_df["Property"].astype(str) == selected_property
+        ]
+      else:
+        filtered_dashboard_df = property_detail_df
+
+      col_chart, _ = st.columns([2, 1])
+      with col_chart:
+        core_sum = filtered_dashboard_df["Core Hours"].sum()
+        one_to_one_sum = filtered_dashboard_df["1to1 Hours"].sum()
+
+        chart_data = pd.DataFrame({
+            "Hours Type": ["1to1 Hours", "Core Hours"],
+            "Hours": [one_to_one_sum, core_sum],
+        })
+
+        fig_circle = px.pie(
+            chart_data,
+            values="Hours",
+            names="Hours Type",
+            hole=0.5,
+            title=f"⭕ Core vs 1to1 Total Hours ({selected_property})",
+            color_discrete_sequence=["#1f77b4", "#ff7f0e"],
+        )
+        fig_circle.update_traces(textinfo="value")
+        st.plotly_chart(fig_circle, use_container_width=True)
+
+      st.dataframe(filtered_dashboard_df, use_container_width=True)
+
+      prop_excel = to_excel_bytes(filtered_dashboard_df)
+      st.download_button(
+          label=(
+              "📥 Download Property Dashboard Report Excel"
+              f" ({selected_property})"
+          ),
+          data=prop_excel,
+          file_name=(
+              "Property_Dashboard_Report_"
+              f"{selected_property.replace(' ', '_')}.xlsx"
+          ),
+          mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      )
+  except Exception as e:
+    st.error(f"❌ Display Error: {e}")
