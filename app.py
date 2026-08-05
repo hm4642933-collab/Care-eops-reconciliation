@@ -52,7 +52,7 @@ st.markdown(
 )
 
 # ==================== 1. CONSTANTS ====================
-TOTAL_FIXED_BEDS = 485  # Total Beds set to 485
+TOTAL_FIXED_BEDS = 485
 
 # ==================== 2. AUTHENTICATION ====================
 USERNAME = "admin"
@@ -81,7 +81,6 @@ if not st.session_state.logged_in:
 
 # ==================== 3. SIDEBAR NAVIGATION ====================
 with st.sidebar:
-  # Professional Brand Header
   st.markdown(
       """
         <div class="brand-box">
@@ -120,7 +119,6 @@ with st.sidebar:
   navigation_page = st.session_state.navigation_page
 
 
-# Helper function to clean SUID string
 def clean_suid(series):
   return (
       series.astype(str)
@@ -131,13 +129,11 @@ def clean_suid(series):
   )
 
 
-# Helper function to convert dataframe to Excel bytes for downloading
 def to_excel_bytes(df):
   output = io.BytesIO()
   with pd.ExcelWriter(output, engine="openpyxl") as writer:
     df.to_excel(writer, index=False, sheet_name="Sheet1")
-  processed_data = output.getvalue()
-  return processed_data
+  return output.getvalue()
 
 
 # ==================== 4. MAIN APPLICATION ====================
@@ -153,285 +149,286 @@ with col2:
 
 if cm_file and eops_file:
   if st.button("🚀 Process Reconciliation & Dashboard", use_container_width=True):
-    with st.spinner("Processing Data..."):
+    try:
+      with st.spinner("Processing Data..."):
+        df_cm = pd.read_excel(cm_file, dtype=str)
+        df_eops = pd.read_excel(eops_file, dtype=str)
 
-      # --- LOAD DATASETS ---
-      df_cm = pd.read_excel(cm_file, dtype=str)
-      df_eops = pd.read_excel(eops_file, dtype=str)
-
-      # Clean Headers
-      df_cm.columns = [str(c).strip() for c in df_cm.columns]
-      df_eops.columns = [str(c).strip() for c in df_eops.columns]
+        df_cm.columns = [str(c).strip() for c in df_cm.columns]
+        df_eops.columns = [str(c).strip() for c in df_eops.columns]
 
 
-      def get_col(df, possible_names):
-        for name in possible_names:
-          for col in df.columns:
-            if col.lower().strip() == name.lower().strip():
-              return col
-        return None
+        def get_col(df, possible_names):
+          for name in possible_names:
+            for col in df.columns:
+              if col.lower().strip() == name.lower().strip():
+                return col
+          return None
 
 
-      # 1. SUID Mapping
-      eops_suid_col = get_col(
-          df_eops, ["SUID", "Resident Ref", "SU Ref", "Service User ID", "Ref"]
-      )
-      cm_suid_col = get_col(
-          df_cm, ["Resident Ref", "SUID", "SU Ref", "Service User ID", "Ref"]
-      )
-
-      if not eops_suid_col or not cm_suid_col:
-        st.error(
-            "❌ Error: SUID / Resident Ref column not found in EOPS or Care"
-            " Master files."
+        eops_suid_col = get_col(
+            df_eops, ["SUID", "Resident Ref", "SU Ref", "Service User ID", "Ref"]
         )
-        st.stop()
-
-      df_eops["SUID_Clean"] = clean_suid(df_eops[eops_suid_col])
-      df_cm["SUID_Clean"] = clean_suid(df_cm[cm_suid_col])
-
-      df_eops = df_eops.dropna(subset=["SUID_Clean"]).copy()
-      df_cm = df_cm.dropna(subset=["SUID_Clean"]).copy()
-
-      # 2. EOPS Mappings
-      fn_eops = get_col(
-          df_eops, ["Service User Name", "SU Name", "First Name"]
-      )
-      sn_eops = get_col(df_eops, ["SU Surname", "Surname", "Last Name"])
-
-      df_eops["EOPS_Name"] = (
-          (df_eops[fn_eops].fillna("") if fn_eops else "")
-          + " "
-          + (df_eops[sn_eops].fillna("") if sn_eops else "")
-      ).str.strip()
-      df_eops["SU Name"] = df_eops["EOPS_Name"].replace("", "N/A").fillna("N/A")
-
-      # Improved Admission Date Handling
-      adm_eops = get_col(
-          df_eops,
-          [
-              "Admission Date",
-              "Admit Date",
-              "Admission_Date",
-              "Start Date",
-              "StartDate",
-          ],
-      )
-      if adm_eops:
-        parsed_dates = pd.to_datetime(df_eops[adm_eops], errors="coerce")
-        df_eops["Admission Date"] = parsed_dates.dt.strftime("%d/%m/%Y")
-        # Fallback for text-based dates if datetime conversion fails for some rows
-        df_eops["Admission Date"] = df_eops["Admission Date"].fillna(
-            df_eops[adm_eops].astype(str).str.strip()
+        cm_suid_col = get_col(
+            df_cm, ["Resident Ref", "SUID", "SU Ref", "Service User ID", "Ref"]
         )
-        df_eops["Admission Date"] = df_eops["Admission Date"].replace(
-            ["nan", "NAT", "NaT", ""], "N/A"
-        )
-      else:
-        df_eops["Admission Date"] = "N/A"
 
-      fa_col = get_col(
-          df_eops,
-          [
-              "FundingAuthority",
-              "Funding Authority",
-              "Council Name",
-              "LA Name",
-              "Split Funding Council",
-          ],
-      )
-      df_eops["Funding Authority"] = (
-          df_eops[fa_col].astype(str).str.strip().fillna("N/A")
-          if fa_col
-          else "N/A"
-      )
-
-      prop_eops = get_col(
-          df_eops,
-          ["Property", "Property Address", "Address", "Property_Address"],
-      )
-      df_eops["Property"] = (
-          df_eops[prop_eops].astype(str).str.strip().fillna("N/A")
-          if prop_eops
-          else "N/A"
-      )
-
-      # EOPS Numeric Columns
-      core_h = get_col(df_eops, ["Core Hours"])
-      dm_h = get_col(df_eops, ["Direct Management On Site Hours"])
-      core_c = get_col(df_eops, ["Core Weekly Charges"])
-      dm_c = get_col(df_eops, ["Direct Management On Site Weekly Charges"])
-      one_h = get_col(df_eops, ["Total 1:1 + PC Hours", "1to1 Hours"])
-      one_c = get_col(df_eops, ["Total 1:1 Weekly Charges", "1to1 Charges"])
-
-      for col in [core_h, dm_h, core_c, dm_c, one_h, one_c]:
-        if col:
-          df_eops[col] = pd.to_numeric(df_eops[col], errors="coerce").fillna(0)
-
-      df_eops["EOPS Core Hours"] = (df_eops[core_h] if core_h else 0) + (
-          df_eops[dm_h] if dm_h else 0
-      )
-      df_eops["EOPS Core Weekly Rate"] = (df_eops[core_c] if core_c else 0) + (
-          df_eops[dm_c] if dm_c else 0
-      )
-      df_eops["EOPS 1to1 Hours"] = df_eops[one_h] if one_h else 0
-      df_eops["EOPS 1to1 Weekly Rate"] = df_eops[one_c] if one_c else 0
-
-      # --- CARE MASTER CALCULATIONS ---
-      charge_col = get_col(df_cm, ["Charge Type"])
-      df_cm["Charge Type Clean"] = (
-          df_cm[charge_col].astype(str).str.strip().str.upper()
-          if charge_col
-          else ""
-      )
-
-      df_cm = df_cm[
-          ~df_cm["Charge Type Clean"].isin([
-              "TC",
-              "HB",
-              "TENANT CONTRIBUTION",
-              "HOUSING BENEFIT",
-              "TOP UP",
-              "TOPUP",
-          ])
-      ].copy()
-
-      rep_hrs = get_col(df_cm, ["Report Hours", "Hours"])
-      w_fee = get_col(df_cm, ["Total Weekly Fee", "Weekly Fee", "Fee"])
-
-      for col in [rep_hrs, w_fee]:
-        if col:
-          df_cm[col] = pd.to_numeric(df_cm[col], errors="coerce").fillna(0)
-
-      cm_core = (
-          df_cm[
-              df_cm["Charge Type Clean"].isin([
-                  "STAND",
-                  "DIRECT MANAGEMENT",
-                  "DIRECT MANAGEMENT ON SITE",
-                  "CORE",
-              ])
-          ]
-          .groupby("SUID_Clean")
-          .agg({
-              rep_hrs: "sum" if rep_hrs else lambda x: 0,
-              w_fee: "sum" if w_fee else lambda x: 0,
-          })
-          .rename(
-              columns={
-                  rep_hrs: "CM Core Hours",
-                  w_fee: "CM Core Weekly Rate",
-              }
+        if not eops_suid_col or not cm_suid_col:
+          st.error(
+              "❌ Error: SUID / Resident Ref column not found in EOPS or Care"
+              f" Master files.\n- EOPS Columns found: {list(df_eops.columns)}"
+              f"\n- Care Master Columns found: {list(df_cm.columns)}"
           )
-      )
+          st.stop()
 
-      cm_1to1 = (
-          df_cm[
-              df_cm["Charge Type Clean"].isin(
-                  ["1TO1", "PC", "PERSONAL CARE", "1:1"]
-              )
-          ]
-          .groupby("SUID_Clean")
-          .agg({
-              rep_hrs: "sum" if rep_hrs else lambda x: 0,
-              w_fee: "sum" if w_fee else lambda x: 0,
-          })
-          .rename(
-              columns={
-                  rep_hrs: "CM 1to1 Hours",
-                  w_fee: "CM 1to1 Weekly Rate",
-              }
+        df_eops["SUID_Clean"] = clean_suid(df_eops[eops_suid_col])
+        df_cm["SUID_Clean"] = clean_suid(df_cm[cm_suid_col])
+
+        df_eops = df_eops.dropna(subset=["SUID_Clean"]).copy()
+        df_cm = df_cm.dropna(subset=["SUID_Clean"]).copy()
+
+        fn_eops = get_col(
+            df_eops, ["Service User Name", "SU Name", "First Name"]
+        )
+        sn_eops = get_col(df_eops, ["SU Surname", "Surname", "Last Name"])
+
+        df_eops["EOPS_Name"] = (
+            (df_eops[fn_eops].fillna("") if fn_eops else "")
+            + " "
+            + (df_eops[sn_eops].fillna("") if sn_eops else "")
+        ).str.strip()
+        df_eops["SU Name"] = df_eops["EOPS_Name"].replace("", "N/A").fillna("N/A")
+
+        adm_eops = get_col(
+            df_eops,
+            [
+                "Admission Date",
+                "Admit Date",
+                "Admission_Date",
+                "Start Date",
+                "StartDate",
+            ],
+        )
+        if adm_eops:
+          parsed_dates = pd.to_datetime(df_eops[adm_eops], errors="coerce")
+          df_eops["Admission Date"] = parsed_dates.dt.strftime("%d/%m/%Y")
+          df_eops["Admission Date"] = df_eops["Admission Date"].fillna(
+              df_eops[adm_eops].astype(str).str.strip()
           )
-      )
+          df_eops["Admission Date"] = df_eops["Admission Date"].replace(
+              ["nan", "NAT", "NaT", ""], "N/A"
+          )
+        else:
+          df_eops["Admission Date"] = "N/A"
 
-      recon = df_eops[[
-          "SUID_Clean",
-          "SU Name",
-          "Admission Date",
-          "Funding Authority",
-          "Property",
-          "EOPS Core Hours",
-          "EOPS Core Weekly Rate",
-          "EOPS 1to1 Hours",
-          "EOPS 1to1 Weekly Rate",
-      ]].copy()
+        fa_col = get_col(
+            df_eops,
+            [
+                "FundingAuthority",
+                "Funding Authority",
+                "Council Name",
+                "LA Name",
+                "Split Funding Council",
+            ],
+        )
+        df_eops["Funding Authority"] = (
+            df_eops[fa_col].astype(str).str.strip().fillna("N/A")
+            if fa_col
+            else "N/A"
+        )
 
-      recon = pd.merge(recon, cm_core, on="SUID_Clean", how="left")
-      recon = pd.merge(recon, cm_1to1, on="SUID_Clean", how="left").fillna(0)
+        prop_eops = get_col(
+            df_eops,
+            ["Property", "Property Address", "Address", "Property_Address"],
+        )
+        df_eops["Property"] = (
+            df_eops[prop_eops].astype(str).str.strip().fillna("N/A")
+            if prop_eops
+            else "N/A"
+        )
 
-      recon["Core Hours Difference"] = (
-          recon["CM Core Hours"] - recon["EOPS Core Hours"]
-      )
-      recon["1to1 Hours Difference"] = (
-          recon["CM 1to1 Hours"] - recon["EOPS 1to1 Hours"]
-      )
-      recon["1to1 Weekly Rate Difference"] = (
-          recon["CM 1to1 Weekly Rate"] - recon["EOPS 1to1 Weekly Rate"]
-      )
+        core_h = get_col(df_eops, ["Core Hours"])
+        dm_h = get_col(df_eops, ["Direct Management On Site Hours"])
+        core_c = get_col(df_eops, ["Core Weekly Charges"])
+        dm_c = get_col(
+            df_eops, ["Direct Management On Site Weekly Charges"]
+        )
+        one_h = get_col(df_eops, ["Total 1:1 + PC Hours", "1to1 Hours"])
+        one_c = get_col(df_eops, ["Total 1:1 Weekly Charges", "1to1 Charges"])
 
-      recon["CM Total Weekly Rate"] = (
-          recon["CM Core Weekly Rate"] + recon["CM 1to1 Weekly Rate"]
-      )
-      recon["EOPS Total Weekly Rate"] = (
-          recon["EOPS Core Weekly Rate"] + recon["EOPS 1to1 Weekly Rate"]
-      )
-      recon["Total Rate Difference"] = (
-          recon["CM Total Weekly Rate"] - recon["EOPS Total Weekly Rate"]
-      )
+        for col in [core_h, dm_h, core_c, dm_c, one_h, one_c]:
+          if col:
+            df_eops[col] = pd.to_numeric(df_eops[col], errors="coerce").fillna(
+                0
+            )
 
-      recon_output = recon.rename(columns={"SUID_Clean": "SUID"})
+        df_eops["EOPS Core Hours"] = (df_eops[core_h] if core_h else 0) + (
+            df_eops[dm_h] if dm_h else 0
+        )
+        df_eops["EOPS Core Weekly Rate"] = (df_eops[core_c] if core_c else 0) + (
+            df_eops[dm_c] if dm_c else 0
+        )
+        df_eops["EOPS 1to1 Hours"] = df_eops[one_h] if one_h else 0
+        df_eops["EOPS 1to1 Weekly Rate"] = df_eops[one_c] if one_c else 0
 
-      final_recon = recon_output[[
-          "SUID",
-          "SU Name",
-          "Admission Date",
-          "Funding Authority",
-          "Property",
-          "CM Core Hours",
-          "EOPS Core Hours",
-          "Core Hours Difference",
-          "CM Core Weekly Rate",
-          "EOPS Core Weekly Rate",
-          "CM 1to1 Hours",
-          "EOPS 1to1 Hours",
-          "1to1 Hours Difference",
-          "CM 1to1 Weekly Rate",
-          "EOPS 1to1 Weekly Rate",
-          "1to1 Weekly Rate Difference",
-          "CM Total Weekly Rate",
-          "EOPS Total Weekly Rate",
-          "Total Rate Difference",
-      ]].copy()
+        charge_col = get_col(df_cm, ["Charge Type"])
+        df_cm["Charge Type Clean"] = (
+            df_cm[charge_col].astype(str).str.strip().str.upper()
+            if charge_col
+            else ""
+        )
 
-      # Add Serial Number starting from 1 in the first column
-      final_recon.insert(0, "S.No", range(1, len(final_recon) + 1))
+        df_cm = df_cm[
+            ~df_cm["Charge Type Clean"].isin([
+                "TC",
+                "HB",
+                "TENANT CONTRIBUTION",
+                "HOUSING BENEFIT",
+                "TOP UP",
+                "TOPUP",
+            ])
+        ].copy()
 
-      property_detail_df = recon_output[[
-          "SUID",
-          "SU Name",
-          "Admission Date",
-          "Funding Authority",
-          "Property",
-          "EOPS Core Hours",
-          "EOPS 1to1 Hours",
-      ]].copy()
+        rep_hrs = get_col(df_cm, ["Report Hours", "Hours"])
+        w_fee = get_col(df_cm, ["Total Weekly Fee", "Weekly Fee", "Fee"])
 
-      property_detail_df.rename(
-          columns={
-              "EOPS Core Hours": "Core Hours",
-              "EOPS 1to1 Hours": "1to1 Hours",
-          },
-          inplace=True,
-      )
+        for col in [rep_hrs, w_fee]:
+          if col:
+            df_cm[col] = pd.to_numeric(df_cm[col], errors="coerce").fillna(0)
 
-      property_detail_df["Total Hours"] = (
-          property_detail_df["Core Hours"] + property_detail_df["1to1 Hours"]
-      )
-      property_detail_df.insert(0, "S.No", range(1, len(property_detail_df) + 1))
+        cm_core = (
+            df_cm[
+                df_cm["Charge Type Clean"].isin([
+                    "STAND",
+                    "DIRECT MANAGEMENT",
+                    "DIRECT MANAGEMENT ON SITE",
+                    "CORE",
+                ])
+            ]
+            .groupby("SUID_Clean")
+            .agg({
+                rep_hrs: "sum" if rep_hrs else lambda x: 0,
+                w_fee: "sum" if w_fee else lambda x: 0,
+            })
+            .rename(
+                columns={
+                    rep_hrs: "CM Core Hours",
+                    w_fee: "CM Core Weekly Rate",
+                }
+            )
+        )
 
-      st.session_state.processed = True
-      st.session_state.final_recon = final_recon
-      st.session_state.property_detail_df = property_detail_df
+        cm_1to1 = (
+            df_cm[
+                df_cm["Charge Type Clean"].isin(
+                    ["1TO1", "PC", "PERSONAL CARE", "1:1"]
+                )
+            ]
+            .groupby("SUID_Clean")
+            .agg({
+                rep_hrs: "sum" if rep_hrs else lambda x: 0,
+                w_fee: "sum" if w_fee else lambda x: 0,
+            })
+            .rename(
+                columns={
+                    rep_hrs: "CM 1to1 Hours",
+                    w_fee: "CM 1to1 Weekly Rate",
+                }
+            )
+        )
+
+        recon = df_eops[[
+            "SUID_Clean",
+            "SU Name",
+            "Admission Date",
+            "Funding Authority",
+            "Property",
+            "EOPS Core Hours",
+            "EOPS Core Weekly Rate",
+            "EOPS 1to1 Hours",
+            "EOPS 1to1 Weekly Rate",
+        ]].copy()
+
+        recon = pd.merge(recon, cm_core, on="SUID_Clean", how="left")
+        recon = pd.merge(recon, cm_1to1, on="SUID_Clean", how="left").fillna(0)
+
+        recon["Core Hours Difference"] = (
+            recon["CM Core Hours"] - recon["EOPS Core Hours"]
+        )
+        recon["1to1 Hours Difference"] = (
+            recon["CM 1to1 Hours"] - recon["EOPS 1to1 Hours"]
+        )
+        recon["1to1 Weekly Rate Difference"] = (
+            recon["CM 1to1 Weekly Rate"] - recon["EOPS 1to1 Weekly Rate"]
+        )
+
+        recon["CM Total Weekly Rate"] = (
+            recon["CM Core Weekly Rate"] + recon["CM 1to1 Weekly Rate"]
+        )
+        recon["EOPS Total Weekly Rate"] = (
+            recon["EOPS Core Weekly Rate"] + recon["EOPS 1to1 Weekly Rate"]
+        )
+        recon["Total Rate Difference"] = (
+            recon["CM Total Weekly Rate"] - recon["EOPS Total Weekly Rate"]
+        )
+
+        recon_output = recon.rename(columns={"SUID_Clean": "SUID"})
+
+        final_recon = recon_output[[
+            "SUID",
+            "SU Name",
+            "Admission Date",
+            "Funding Authority",
+            "Property",
+            "CM Core Hours",
+            "EOPS Core Hours",
+            "Core Hours Difference",
+            "CM Core Weekly Rate",
+            "EOPS Core Weekly Rate",
+            "CM 1to1 Hours",
+            "EOPS 1to1 Hours",
+            "1to1 Hours Difference",
+            "CM 1to1 Weekly Rate",
+            "EOPS 1to1 Weekly Rate",
+            "1to1 Weekly Rate Difference",
+            "CM Total Weekly Rate",
+            "EOPS Total Weekly Rate",
+            "Total Rate Difference",
+        ]].copy()
+
+        final_recon.insert(0, "S.No", range(1, len(final_recon) + 1))
+
+        property_detail_df = recon_output[[
+            "SUID",
+            "SU Name",
+            "Admission Date",
+            "Funding Authority",
+            "Property",
+            "EOPS Core Hours",
+            "EOPS 1to1 Hours",
+        ]].copy()
+
+        property_detail_df.rename(
+            columns={
+                "EOPS Core Hours": "Core Hours",
+                "EOPS 1to1 Hours": "1to1 Hours",
+            },
+            inplace=True,
+        )
+
+        property_detail_df["Total Hours"] = (
+            property_detail_df["Core Hours"] + property_detail_df["1to1 Hours"]
+        )
+        property_detail_df.insert(0, "S.No", range(1, len(property_detail_df) + 1))
+
+        st.session_state.processed = True
+        st.session_state.final_recon = final_recon
+        st.session_state.property_detail_df = property_detail_df
+        st.success("✅ Data Processed Successfully!")
+        st.rerun()
+
+    except Exception as e:
+      st.error(f"❌ An error occurred during processing: {e}")
 
 if st.session_state.get("processed", False):
   final_recon = st.session_state.final_recon
@@ -441,7 +438,6 @@ if st.session_state.get("processed", False):
     st.subheader("📋 Care Master vs EOPS Reconciliation Table")
     st.dataframe(final_recon, use_container_width=True)
 
-    # Separate Download Button for Reconciliation Tab
     recon_excel = to_excel_bytes(final_recon)
     st.download_button(
         label="📥 Download Care Master vs EOPS Reconciliation Excel",
@@ -506,7 +502,6 @@ if st.session_state.get("processed", False):
 
     st.dataframe(filtered_dashboard_df, use_container_width=True)
 
-    # Separate Download Button for Property Dashboard Tab
     prop_excel = to_excel_bytes(filtered_dashboard_df)
     st.download_button(
         label=(
