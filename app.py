@@ -153,8 +153,7 @@ if eops_file:
     st.session_state.eops_file_bytes = eops_file.getvalue()
 
 has_files = (
-    "cm_file_bytes" in st.session_state
-    and "eops_file_bytes" in st.session_state
+    "cm_file_bytes" in st.session_state and "eops_file_bytes" in st.session_state
 )
 
 if has_files:
@@ -189,9 +188,7 @@ if has_files:
 
                 if not eops_suid_col or not cm_suid_col:
                     st.error(
-                        "❌ Error: SUID / Resident Ref column not found in EOPS or Care"
-                        f" Master files.\n- EOPS Columns found: {list(df_eops.columns)}"
-                        f"\n- Care Master Columns found: {list(df_cm.columns)}"
+                        "❌ Error: SUID / Resident Ref column not found in EOPS or Care Master files."
                     )
                     st.stop()
 
@@ -381,6 +378,11 @@ if has_files:
                 recon["Core Hours Difference"] = (
                     recon["CM Core Hours"] - recon["EOPS Core Hours"]
                 )
+                # Added Core Weekly Rate Difference Column here
+                recon["Core Weekly Rate Difference"] = (
+                    recon["CM Core Weekly Rate"]
+                    - recon["EOPS Core Weekly Rate"]
+                )
                 recon["1to1 Hours Difference"] = (
                     recon["CM 1to1 Hours"] - recon["EOPS 1to1 Hours"]
                 )
@@ -414,6 +416,7 @@ if has_files:
                     "Core Hours Difference",
                     "CM Core Weekly Rate",
                     "EOPS Core Weekly Rate",
+                    "Core Weekly Rate Difference",  # Included in output sequence
                     "CM 1to1 Hours",
                     "EOPS 1to1 Hours",
                     "1to1 Hours Difference",
