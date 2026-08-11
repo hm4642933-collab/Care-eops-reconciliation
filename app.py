@@ -9,7 +9,7 @@ st.set_page_config(
     layout="wide",
 )
 
-# Embedded Property Data dictionary / dataframe mapping
+# Embedded Full Property Data dictionary / dataframe mapping (Total 539 Beds)
 PROPERTY_DATA_RAW = """PR ID\tADDRESS\tTOTAL BEDS
 PF0036\tPF0036 - 57 Belgrave Road\t1
 PF0040\tPF0040 - 61 Holtspur Avenue\t1
@@ -118,7 +118,46 @@ PR0116\tPR0116 - 70 Church Street\t5
 PR0117\tPR0117 - 72 Church Street\t5
 PR0118\tPR0118 - 74 Church Street\t5
 PR0119\tPR0119 - 76 Church Street\t5
-PR0120\tPR0120 - 78 Church Street\t5"""
+PR0120\tPR0120 - 78 Church Street\t5
+PF0037\tPF0037 - 25 Farnham Road\t1
+PF0038\tPF0038 - 37 Farnham Road\t1
+PF0039\tPF0039 - 51 Farnham Road\t1
+PF0041\tPF0041 - 63 Holtspur Avenue\t1
+PR0001\tPR0001 - 44 Stoke Poges Lane\t7
+PR0002\tPR0002 - 131 Stoke Poges Lane\t7
+PR0005\tPR0005 - 139 Stoke Poges Lane\t7
+PR0006\tPR0006 - 141 Stoke Poges Lane\t7
+PR0007\tPR0007 - 143 Stoke Poges Lane\t7
+PR0011\tPR0011 - 256 Stoke Poges Lane\t6
+PR0013\tPR0013 - 109 Stoke Poges Lane\t6
+PR0014\tPR0014 - 111 Stoke Poges Lane\t6
+PR0016\tPR0016 - 113 Stoke Poges Lane\t6
+PR0018\tPR0018 - 145 Stoke Poges Lane\t6
+PR0022\tPR0022 - 35 Mildmay Road\t6
+PR0025\tPR0025 - 46 Mildmay Road\t6
+PR0027\tPR0027 - 48 Mildmay Road\t6
+PF0043\tFlat 1, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
+PF0044\tFlat 2, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
+PF0045\tFlat 3, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
+PF0046\tFlat 4, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
+PF0047\tFlat 5, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
+PF0048\tFlat 6, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
+PF0049\tFlat 7, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
+PF0050\tFlat 8, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
+PF0051\tFlat 9, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
+PF0052\tFlat 10, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
+PF0093\tFlat 14, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
+PF0094\tFlat 15, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
+PF0095\tFlat 16, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
+PF0096\tFlat 17, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
+PF0097\tFlat 18, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
+PF0098\tFlat 19, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
+PF0099\tFlat 20, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
+PF0100\tFlat 21, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
+PF0101\tFlat 22, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
+PF0102\tFlat 23, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
+PF0103\tFlat 24, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
+PF0104\tFlat 25, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1"""
 
 property_beds_df = pd.read_csv(io.StringIO(PROPERTY_DATA_RAW), sep="\t")
 property_beds_df["ADDRESS_CLEAN"] = (
@@ -615,7 +654,6 @@ if st.session_state.get("processed", False):
                     property_detail_df["Property"].astype(str)
                     == selected_property
                 ]
-                # Match property fixed beds from embedded Property Data
                 match_row = property_beds_df[
                     property_beds_df["ADDRESS_CLEAN"].str.contains(
                         selected_property, case=False, na=False
