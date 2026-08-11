@@ -9,7 +9,7 @@ st.set_page_config(
     layout="wide",
 )
 
-# Embedded Property Data Lookup Table (With exact Bed Counts)
+# Complete Property Data Lookup Table with Fixed Property-wise Total Beds
 PROPERTY_DATA_RAW = """Property\tTOTAL BEDS
 PF0036 - 57 Belgrave Road\t1
 PF0040 - 61 Holtspur Avenue\t1
@@ -162,7 +162,7 @@ Flat 23, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
 Flat 24, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
 Flat 25, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1"""
 
-# Safe parsing of embedded property data
+# Parse property lookup data safely
 property_lines = PROPERTY_DATA_RAW.strip().split("\n")
 parsed_property_rows = []
 for line in property_lines:
@@ -668,12 +668,13 @@ if st.session_state.get("processed", False):
                 "Search or Select Property:", property_options
             )
 
-            # Calculate metrics dynamically based on selection using property_beds_df lookup
+            # Fixed Total Beds Calculation across sheet vs specific property selection
             if selected_property != "All Properties":
                 filtered_dashboard_df = property_detail_df[
                     property_detail_df["Property"].astype(str)
                     == selected_property
                 ]
+                # Match exact property beds from embedded lookup table
                 match_row = property_beds_df[
                     property_beds_df["PROPERTY_CLEAN"].str.contains(
                         selected_property, case=False, na=False
@@ -695,7 +696,9 @@ if st.session_state.get("processed", False):
                 )
             else:
                 filtered_dashboard_df = property_detail_df
-                fixed_total_beds = int(property_beds_df["TOTAL BEDS"].sum())
+                fixed_total_beds = int(
+                    property_beds_df["TOTAL BEDS"].sum()
+                )  # Fixed grand total beds (539)
                 total_occupied_eops = property_detail_df["SUID"].nunique()
                 total_vacant_beds = max(
                     0, fixed_total_beds - total_occupied_eops
