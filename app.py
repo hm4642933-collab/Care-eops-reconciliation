@@ -9,161 +9,6 @@ st.set_page_config(
     layout="wide",
 )
 
-# Embedded Full Property Data dictionary / dataframe mapping (Total 539 Beds)
-PROPERTY_DATA_RAW = """PR ID\tADDRESS\tTOTAL BEDS
-PF0036\tPF0036 - 57 Belgrave Road\t1
-PF0040\tPF0040 - 61 Holtspur Avenue\t1
-PF0042\tPF0042 - Heneage Court, Grange Road, Bucks, SL9 9FB\t1
-PR0003\tPR0003 - NETHERWOODS\t11
-PR0004\tPR0004  137 Stoke Poges Lane, Slough, Berkshire, SL1 3LX\t8
-PR0008\tPR0008 - 246 Stoke Poges Lane\t4
-PR0009\tPR0009 - 12 ELLIS AVENUE\t8
-PR0010\tPR0010 - 8A Regent Court\t1
-PR0012\tPR0012 - 31 LABURNHAM RD\t10
-PR0015\tPR0015 - 13 RAMSBURY CLOSE\t6
-PR0017\tPR0017 - 100 West Burnham Way\t5
-PR0019\tPR0019 - 19 Lansdowne Avenue\t5
-PR0020\tPR0020 - 75 Lascelles Road\t5
-PR0021\tPR0021 - 85 Lascelles Road\t5
-PR0023\tPR0023 - 33 Mildmay Road\t5
-PR0024\tPR0024 - 44 Mildmay Road\t6
-PR0026\tPR0026 - 69 Mayflower Way\t4
-PR0028\tPR0028 - 22 Broad Keystone\t4
-PR0029\tPR0029 - 8 Broad Keystone\t4
-PR0030\tPR0030 - 32 Broad Keystone\t4
-PR0031\tPR0031 - 25 Broad Keystone\t4
-PR0032\tPR0032 - 13 Broad Keystone\t4
-PR0033\tPR0033 - 10 Broad Keystone\t4
-PR0035\tPR0035 - 34 Broad Keystone\t4
-PR0036\tPR0036 - 29 Broad Keystone\t4
-PR0037\tPR0037 - 24 Broad Keystone\t4
-PR0038\tPR0038 - 14 Broad Keystone\t4
-PR0039\tPR0039 - 26 Broad Keystone\t4
-PR0041\tPR0041 - 23 Broad Keystone\t4
-PR0042\tPR0042 - 12 Broad Keystone\t4
-PR0043\tPR0043 - 15 Broad Keystone\t4
-PR0044\tPR0044 - 30 Broad Keystone\t4
-PR0045\tPR0045 - 28 Broad Keystone\t4
-PR0046\tPR0046 - 27 Broad Keystone\t4
-PR0047\tPR0047 - 31 Broad Keystone\t4
-PR0048\tPR0048 - 9 Broad Keystone\t4
-PR0049\tPR0049 - 18 Broad Keystone\t4
-PR0050\tPR0050 - 11 Broad Keystone\t4
-PR0051\tPR0051 - 21 Broad Keystone\t4
-PR0052\tPR0052 - 17 Broad Keystone\t4
-PR0053\tPR0053 - 19 Broad Keystone\t4
-PR0054\tPR0054 - 33 Broad Keystone\t4
-PR0055\tPR0055 - 20 Broad Keystone\t4
-PR0056\tPR0056 - 2 Broad Keystone\t4
-PR0057\tPR0057 - 4 Broad Keystone\t4
-PR0058\tPR0058 - 6 Broad Keystone\t4
-PR0059\tPR0059 - 7 Broad Keystone\t4
-PR0060\tPR0060 - 5 Broad Keystone\t4
-PR0061\tPR0061 - 3 Broad Keystone\t4
-PR0062\tPR0062 - 1 Broad Keystone\t4
-PR0063\tPR0063 - 16 Broad Keystone\t4
-PR0064\tPR0064 - 38 Broad Keystone\t4
-PR0065\tPR0065 - 40 Broad Keystone\t4
-PR0066\tPR0066 - 37 Broad Keystone\t4
-PR0067\tPR0067 - 35 Broad Keystone\t4
-PR0068\tPR0068 - 39 Broad Keystone\t4
-PR0069\tPR0069 - 36 Broad Keystone\t4
-PR0070\tPR0070 - 75 Dropmore Road\t4
-PR0071\tPR0071 - 31 Burnham Lane\t5
-PR0072\tPR0072 - 33 Burnham Lane\t5
-PR0073\tPR0073 - 61 Burnham Lane\t5
-PR0074\tPR0074 - 59 Burnham Lane\t5
-PR0075\tPR0075 - 57 Burnham Lane\t5
-PR0076\tPR0076 - 55 Burnham Lane\t5
-PR0077\tPR0077 - 29 Burnham Lane\t5
-PR0078\tPR0078 - 35 Burnham Lane\t5
-PR0079\tPR0079 - 37 Burnham Lane\t5
-PR0080\tPR0080 - 39 Burnham Lane\t5
-PR0081\tPR0081 - 41 Burnham Lane\t5
-PR0082\tPR0082 - 43 Burnham Lane\t5
-PR0083\tPR0083 - 45 Burnham Lane\t5
-PR0084\tPR0084 - 47 Burnham Lane\t5
-PR0085\tPR0085 - 49 Burnham Lane\t5
-PR0086\tPR0086 - 51 Burnham Lane\t5
-PR0087\tPR0087 - 53 Burnham Lane\t5
-PR0088\tPR0088 - 14 Church Street\t5
-PR0089\tPR0089 - 16 Church Street\t5
-PR0090\tPR0090 - 18 Church Street\t5
-PR0091\tPR0091 - 20 Church Street\t5
-PR0092\tPR0092 - 22 Church Street\t5
-PR0093\tPR0093 - 24 Church Street\t5
-PR0094\tPR0094 - 26 Church Street\t5
-PR0095\tPR0095 - 28 Church Street\t5
-PR0096\tPR0096 - 30 Church Street\t5
-PR0097\tPR0097 - 32 Church Street\t5
-PR0098\tPR0098 - 34 Church Street\t5
-PR0099\tPR0099 - 36 Church Street\t5
-PR0100\tPR0100 - 38 Church Street\t5
-PR0101\tPR0101 - 40 Church Street\t5
-PR0102\tPR0102 - 42 Church Street\t5
-PR0103\tPR0103 - 44 Church Street\t5
-PR0104\tPR0104 - 46 Church Street\t5
-PR0105\tPR0105 - 48 Church Street\t5
-PR0106\tPR0106 - 50 Church Street\t5
-PR0107\tPR0107 - 52 Church Street\t5
-PR0108\tPR0108 - 54 Church Street\t5
-PR0109\tPR0109 - 56 Church Street\t5
-PR0110\tPR0110 - 58 Church Street\t5
-PR0111\tPR0111 - 60 Church Street\t5
-PR0112\tPR0112 - 62 Church Street\t5
-PR0113\tPR0113 - 64 Church Street\t5
-PR0114\tPR0114 - 66 Church Street\t5
-PR0115\tPR0115 - 68 Church Street\t5
-PR0116\tPR0116 - 70 Church Street\t5
-PR0117\tPR0117 - 72 Church Street\t5
-PR0118\tPR0118 - 74 Church Street\t5
-PR0119\tPR0119 - 76 Church Street\t5
-PR0120\tPR0120 - 78 Church Street\t5
-PF0037\tPF0037 - 25 Farnham Road\t1
-PF0038\tPF0038 - 37 Farnham Road\t1
-PF0039\tPF0039 - 51 Farnham Road\t1
-PF0041\tPF0041 - 63 Holtspur Avenue\t1
-PR0001\tPR0001 - 44 Stoke Poges Lane\t7
-PR0002\tPR0002 - 131 Stoke Poges Lane\t7
-PR0005\tPR0005 - 139 Stoke Poges Lane\t7
-PR0006\tPR0006 - 141 Stoke Poges Lane\t7
-PR0007\tPR0007 - 143 Stoke Poges Lane\t7
-PR0011\tPR0011 - 256 Stoke Poges Lane\t6
-PR0013\tPR0013 - 109 Stoke Poges Lane\t6
-PR0014\tPR0014 - 111 Stoke Poges Lane\t6
-PR0016\tPR0016 - 113 Stoke Poges Lane\t6
-PR0018\tPR0018 - 145 Stoke Poges Lane\t6
-PR0022\tPR0022 - 35 Mildmay Road\t6
-PR0025\tPR0025 - 46 Mildmay Road\t6
-PR0027\tPR0027 - 48 Mildmay Road\t6
-PF0043\tFlat 1, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
-PF0044\tFlat 2, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
-PF0045\tFlat 3, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
-PF0046\tFlat 4, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
-PF0047\tFlat 5, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
-PF0048\tFlat 6, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
-PF0049\tFlat 7, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
-PF0050\tFlat 8, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
-PF0051\tFlat 9, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
-PF0052\tFlat 10, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
-PF0093\tFlat 14, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
-PF0094\tFlat 15, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
-PF0095\tFlat 16, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
-PF0096\tFlat 17, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
-PF0097\tFlat 18, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
-PF0098\tFlat 19, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
-PF0099\tFlat 20, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
-PF0100\tFlat 21, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
-PF0101\tFlat 22, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
-PF0102\tFlat 23, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
-PF0103\tFlat 24, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
-PF0104\tFlat 25, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1"""
-
-property_beds_df = pd.read_csv(io.StringIO(PROPERTY_DATA_RAW), sep="\t")
-property_beds_df["ADDRESS_CLEAN"] = (
-    property_beds_df["ADDRESS"].astype(str).str.strip()
-)
-
 # Custom Styling
 st.markdown(
     """
@@ -292,13 +137,24 @@ def to_excel_bytes(df):
 # Main Application
 st.title("📊 Care Master vs EOPS Reconciliation & Property Portal")
 
+col_prop_file, _ = st.columns(2)
+with col_prop_file:
+    property_file = st.file_uploader(
+        "Upload Property Data File (.xlsx)", type=["xlsx", "xls"], key="prop_uploader"
+    )
+
+if property_file:
+    st.session_state.property_file_bytes = property_file.getvalue()
+
 col1, col2 = st.columns(2)
 with col1:
     cm_file = st.file_uploader(
-        "Upload Care Master File (.xlsx)", type=["xlsx", "xls"]
+        "Upload Care Master File (.xlsx)", type=["xlsx", "xls"], key="cm_uploader"
     )
 with col2:
-    eops_file = st.file_uploader("Upload EOPS File (.xlsx)", type=["xlsx", "xls"])
+    eops_file = st.file_uploader(
+        "Upload EOPS File (.xlsx)", type=["xlsx", "xls"], key="eops_uploader"
+    )
 
 if cm_file:
     st.session_state.cm_file_bytes = cm_file.getvalue()
@@ -306,13 +162,39 @@ if eops_file:
     st.session_state.eops_file_bytes = eops_file.getvalue()
 
 has_files = (
-    "cm_file_bytes" in st.session_state and "eops_file_bytes" in st.session_state
+    "cm_file_bytes" in st.session_state
+    and "eops_file_bytes" in st.session_state
+    and "property_file_bytes" in st.session_state
 )
 
 if has_files:
     if st.button("🚀 Process Reconciliation & Dashboard", use_container_width=True):
         try:
             with st.spinner("Processing Data..."):
+                property_beds_df = pd.read_excel(
+                    io.BytesIO(st.session_state.property_file_bytes)
+                )
+                property_beds_df.columns = [
+                    str(c).strip() for c in property_beds_df.columns
+                ]
+                # Automatically find address and total beds columns
+                addr_col = [
+                    c
+                    for c in property_beds_df.columns
+                    if "address" in c.lower() or "property" in c.lower()
+                ][0]
+                beds_col = [
+                    c for c in property_beds_df.columns if "bed" in c.lower()
+                ][0]
+
+                property_beds_df["ADDRESS_CLEAN"] = (
+                    property_beds_df[addr_col].astype(str).str.strip()
+                )
+                property_beds_df["TOTAL BEDS"] = pd.to_numeric(
+                    property_beds_df[beds_col], errors="coerce"
+                ).fillna(0)
+                st.session_state.property_beds_df = property_beds_df
+
                 df_cm = pd.read_excel(
                     io.BytesIO(st.session_state.cm_file_bytes), dtype=str
                 )
@@ -621,6 +503,7 @@ if st.session_state.get("processed", False):
     try:
         final_recon = st.session_state.final_recon
         property_detail_df = st.session_state.property_detail_df
+        property_beds_df = st.session_state.property_beds_df
 
         if st.session_state.navigation_page == "📋 Care Master vs EOPS Reconciliation":
             st.subheader("📋 Care Master vs EOPS Reconciliation Table")
