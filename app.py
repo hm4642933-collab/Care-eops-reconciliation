@@ -9,13 +9,13 @@ st.set_page_config(
     layout="wide",
 )
 
-# Embedded Property Data Lookup Table (Based on your Property file structure)
+# Embedded Property Data Lookup Table (With exact Bed Counts)
 PROPERTY_DATA_RAW = """Property\tTOTAL BEDS
 PF0036 - 57 Belgrave Road\t1
 PF0040 - 61 Holtspur Avenue\t1
 PF0042 - Heneage Court, Grange Road, Bucks, SL9 9FB \t1
 PR0003 - NETHERWOODS\t11
-PR0004  137 Stoke Poges Lane, Slough, Berkshire, SL1 3LX\t8
+PR0004 - 137 Stoke Poges Lane, Slough, Berkshire, SL1 3LX\t8
 PR0008 - 246 Stoke Poges Lane\t4
 PR0009 - 12 ELLIS AVENUE\t8
 PR0010 - 8A Regent Court \t1
@@ -29,7 +29,7 @@ PR0020 - 60 LONDON ROAD\t6
 PR0023 - 99-101 LONDON ROAD\t7
 PR0025 - 64 QUEEN MARY AVENUE\t6
 PR0027 - 15 ASCOTT ROAD\t6
-PR0028  Lanterns, 42 West Road, Guildford, Surrey, GU1 2AT\t9
+PR0028 - Lanterns, 42 West Road, Guildford, Surrey, GU1 2AT\t9
 PR0029 - 242 Tileshurt Road\t6
 PR0031 - 166 Green Lane\t4
 PR0033 - 81 Norbiton Avenue\t6
@@ -60,7 +60,7 @@ PR0067 - 21 Nash Drive\t5
 PR0070 - 3 Sperling Road\t4
 PR0073 - Primrose Lodge - East\t10
 PR0073 - Primrose Lodge - West\t10
-PR0075  Aster Lodge,119-121 Wendover Road, Aylesbury, Bucks, HP21 9LW\t6
+PR0075 - Aster Lodge,119-121 Wendover Road, Aylesbury, Bucks, HP21 9LW\t6
 PR0078 - 3 Church Close, Hayes, Middlesex, UB4 8JW\t6
 PR0079 - 32 Dolphin Road, Slough, SL1 1TD\t8
 PR0081 - 251A Park Road, North Uxbridge, Hillingdon, UB8 1NS\t7
@@ -150,7 +150,7 @@ Flat 11, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
 Flat 12, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
 Flat 13, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
 Flat 14, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
-Flat 15,Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
+Flat 15, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
 Flat 16, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
 Flat 17, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
 Flat 18, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
@@ -162,7 +162,19 @@ Flat 23, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
 Flat 24, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
 Flat 25, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1"""
 
-property_beds_df = pd.read_csv(io.StringIO(PROPERTY_DATA_RAW), sep="\t")
+# Safe parsing of embedded property data
+property_lines = PROPERTY_DATA_RAW.strip().split("\n")
+parsed_property_rows = []
+for line in property_lines:
+    parts = line.split("\t")
+    if len(parts) >= 2:
+        prop_name = "\t".join(parts[:-1]).strip()
+        beds_val = parts[-1].strip()
+        parsed_property_rows.append(
+            {"Property": prop_name, "TOTAL BEDS": beds_val}
+        )
+
+property_beds_df = pd.DataFrame(parsed_property_rows)
 property_beds_df["PROPERTY_CLEAN"] = (
     property_beds_df["Property"].astype(str).str.strip()
 )
@@ -295,7 +307,7 @@ def to_excel_bytes(df):
     return output.getvalue()
 
 
-# Main Application
+# Main Application Header
 st.title("📊 Care Master vs EOPS Reconciliation & Property Portal")
 
 col1, col2 = st.columns(2)
@@ -683,7 +695,7 @@ if st.session_state.get("processed", False):
                 )
             else:
                 filtered_dashboard_df = property_detail_df
-                fixed_total_beds = 539  # Total beds sum across all properties
+                fixed_total_beds = int(property_beds_df["TOTAL BEDS"].sum())
                 total_occupied_eops = property_detail_df["SUID"].nunique()
                 total_vacant_beds = max(
                     0, fixed_total_beds - total_occupied_eops
