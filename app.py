@@ -9,6 +9,122 @@ st.set_page_config(
     layout="wide",
 )
 
+# Embedded Property Data dictionary / dataframe mapping
+PROPERTY_DATA_RAW = """PR ID\tADDRESS\tTOTAL BEDS
+PF0036\tPF0036 - 57 Belgrave Road\t1
+PF0040\tPF0040 - 61 Holtspur Avenue\t1
+PF0042\tPF0042 - Heneage Court, Grange Road, Bucks, SL9 9FB\t1
+PR0003\tPR0003 - NETHERWOODS\t11
+PR0004\tPR0004  137 Stoke Poges Lane, Slough, Berkshire, SL1 3LX\t8
+PR0008\tPR0008 - 246 Stoke Poges Lane\t4
+PR0009\tPR0009 - 12 ELLIS AVENUE\t8
+PR0010\tPR0010 - 8A Regent Court\t1
+PR0012\tPR0012 - 31 LABURNHAM RD\t10
+PR0015\tPR0015 - 13 RAMSBURY CLOSE\t6
+PR0017\tPR0017 - 100 West Burnham Way\t5
+PR0019\tPR0019 - 19 Lansdowne Avenue\t5
+PR0020\tPR0020 - 75 Lascelles Road\t5
+PR0021\tPR0021 - 85 Lascelles Road\t5
+PR0023\tPR0023 - 33 Mildmay Road\t5
+PR0024\tPR0024 - 44 Mildmay Road\t6
+PR0026\tPR0026 - 69 Mayflower Way\t4
+PR0028\tPR0028 - 22 Broad Keystone\t4
+PR0029\tPR0029 - 8 Broad Keystone\t4
+PR0030\tPR0030 - 32 Broad Keystone\t4
+PR0031\tPR0031 - 25 Broad Keystone\t4
+PR0032\tPR0032 - 13 Broad Keystone\t4
+PR0033\tPR0033 - 10 Broad Keystone\t4
+PR0035\tPR0035 - 34 Broad Keystone\t4
+PR0036\tPR0036 - 29 Broad Keystone\t4
+PR0037\tPR0037 - 24 Broad Keystone\t4
+PR0038\tPR0038 - 14 Broad Keystone\t4
+PR0039\tPR0039 - 26 Broad Keystone\t4
+PR0041\tPR0041 - 23 Broad Keystone\t4
+PR0042\tPR0042 - 12 Broad Keystone\t4
+PR0043\tPR0043 - 15 Broad Keystone\t4
+PR0044\tPR0044 - 30 Broad Keystone\t4
+PR0045\tPR0045 - 28 Broad Keystone\t4
+PR0046\tPR0046 - 27 Broad Keystone\t4
+PR0047\tPR0047 - 31 Broad Keystone\t4
+PR0048\tPR0048 - 9 Broad Keystone\t4
+PR0049\tPR0049 - 18 Broad Keystone\t4
+PR0050\tPR0050 - 11 Broad Keystone\t4
+PR0051\tPR0051 - 21 Broad Keystone\t4
+PR0052\tPR0052 - 17 Broad Keystone\t4
+PR0053\tPR0053 - 19 Broad Keystone\t4
+PR0054\tPR0054 - 33 Broad Keystone\t4
+PR0055\tPR0055 - 20 Broad Keystone\t4
+PR0056\tPR0056 - 2 Broad Keystone\t4
+PR0057\tPR0057 - 4 Broad Keystone\t4
+PR0058\tPR0058 - 6 Broad Keystone\t4
+PR0059\tPR0059 - 7 Broad Keystone\t4
+PR0060\tPR0060 - 5 Broad Keystone\t4
+PR0061\tPR0061 - 3 Broad Keystone\t4
+PR0062\tPR0062 - 1 Broad Keystone\t4
+PR0063\tPR0063 - 16 Broad Keystone\t4
+PR0064\tPR0064 - 38 Broad Keystone\t4
+PR0065\tPR0065 - 40 Broad Keystone\t4
+PR0066\tPR0066 - 37 Broad Keystone\t4
+PR0067\tPR0067 - 35 Broad Keystone\t4
+PR0068\tPR0068 - 39 Broad Keystone\t4
+PR0069\tPR0069 - 36 Broad Keystone\t4
+PR0070\tPR0070 - 75 Dropmore Road\t4
+PR0071\tPR0071 - 31 Burnham Lane\t5
+PR0072\tPR0072 - 33 Burnham Lane\t5
+PR0073\tPR0073 - 61 Burnham Lane\t5
+PR0074\tPR0074 - 59 Burnham Lane\t5
+PR0075\tPR0075 - 57 Burnham Lane\t5
+PR0076\tPR0076 - 55 Burnham Lane\t5
+PR0077\tPR0077 - 29 Burnham Lane\t5
+PR0078\tPR0078 - 35 Burnham Lane\t5
+PR0079\tPR0079 - 37 Burnham Lane\t5
+PR0080\tPR0080 - 39 Burnham Lane\t5
+PR0081\tPR0081 - 41 Burnham Lane\t5
+PR0082\tPR0082 - 43 Burnham Lane\t5
+PR0083\tPR0083 - 45 Burnham Lane\t5
+PR0084\tPR0084 - 47 Burnham Lane\t5
+PR0085\tPR0085 - 49 Burnham Lane\t5
+PR0086\tPR0086 - 51 Burnham Lane\t5
+PR0087\tPR0087 - 53 Burnham Lane\t5
+PR0088\tPR0088 - 14 Church Street\t5
+PR0089\tPR0089 - 16 Church Street\t5
+PR0090\tPR0090 - 18 Church Street\t5
+PR0091\tPR0091 - 20 Church Street\t5
+PR0092\tPR0092 - 22 Church Street\t5
+PR0093\tPR0093 - 24 Church Street\t5
+PR0094\tPR0094 - 26 Church Street\t5
+PR0095\tPR0095 - 28 Church Street\t5
+PR0096\tPR0096 - 30 Church Street\t5
+PR0097\tPR0097 - 32 Church Street\t5
+PR0098\tPR0098 - 34 Church Street\t5
+PR0099\tPR0099 - 36 Church Street\t5
+PR0100\tPR0100 - 38 Church Street\t5
+PR0101\tPR0101 - 40 Church Street\t5
+PR0102\tPR0102 - 42 Church Street\t5
+PR0103\tPR0103 - 44 Church Street\t5
+PR0104\tPR0104 - 46 Church Street\t5
+PR0105\tPR0105 - 48 Church Street\t5
+PR0106\tPR0106 - 50 Church Street\t5
+PR0107\tPR0107 - 52 Church Street\t5
+PR0108\tPR0108 - 54 Church Street\t5
+PR0109\tPR0109 - 56 Church Street\t5
+PR0110\tPR0110 - 58 Church Street\t5
+PR0111\tPR0111 - 60 Church Street\t5
+PR0112\tPR0112 - 62 Church Street\t5
+PR0113\tPR0113 - 64 Church Street\t5
+PR0114\tPR0114 - 66 Church Street\t5
+PR0115\tPR0115 - 68 Church Street\t5
+PR0116\tPR0116 - 70 Church Street\t5
+PR0117\tPR0117 - 72 Church Street\t5
+PR0118\tPR0118 - 74 Church Street\t5
+PR0119\tPR0119 - 76 Church Street\t5
+PR0120\tPR0120 - 78 Church Street\t5"""
+
+property_beds_df = pd.read_csv(io.StringIO(PROPERTY_DATA_RAW), sep="\t")
+property_beds_df["ADDRESS_CLEAN"] = (
+    property_beds_df["ADDRESS"].astype(str).str.strip()
+)
+
 # Custom Styling
 st.markdown(
     """
@@ -50,8 +166,6 @@ st.markdown(
 """,
     unsafe_allow_html=True,
 )
-
-TOTAL_FIXED_BEDS = 485
 
 # Initialize Session States safely
 if "logged_in" not in st.session_state:
@@ -378,7 +492,6 @@ if has_files:
                 recon["Core Hours Difference"] = (
                     recon["CM Core Hours"] - recon["EOPS Core Hours"]
                 )
-                # Added Core Weekly Rate Difference Column here
                 recon["Core Weekly Rate Difference"] = (
                     recon["CM Core Weekly Rate"]
                     - recon["EOPS Core Weekly Rate"]
@@ -416,7 +529,7 @@ if has_files:
                     "Core Hours Difference",
                     "CM Core Weekly Rate",
                     "EOPS Core Weekly Rate",
-                    "Core Weekly Rate Difference",  # Included in output sequence
+                    "Core Weekly Rate Difference",
                     "CM 1to1 Hours",
                     "EOPS 1to1 Hours",
                     "1to1 Hours Difference",
@@ -485,20 +598,6 @@ if st.session_state.get("processed", False):
         elif st.session_state.navigation_page == "🏠 Property Dashboard":
             st.subheader("🏠 Property Dynamic Dashboard")
 
-            total_occupied_eops = property_detail_df["SUID"].nunique()
-            total_vacant_beds = max(0, TOTAL_FIXED_BEDS - total_occupied_eops)
-            overall_occupancy_pct = (
-                total_occupied_eops / TOTAL_FIXED_BEDS
-            ) * 100
-
-            b1, b2, b3, b4 = st.columns(4)
-            b1.metric("🛏️ Total Beds (Fixed)", f"{TOTAL_FIXED_BEDS:,}")
-            b2.metric("👥 Occupied Beds (EOPS)", f"{total_occupied_eops:,}")
-            b3.metric("🟢 Vacant Beds", f"{total_vacant_beds:,}")
-            b4.metric("📊 Occupancy Rate", f"{overall_occupancy_pct:.1f}%")
-
-            st.markdown("---")
-
             unique_props = [
                 str(p).strip()
                 for p in property_detail_df["Property"].dropna().unique()
@@ -510,13 +609,52 @@ if st.session_state.get("processed", False):
                 "Search or Select Property:", property_options
             )
 
+            # Calculate metrics dynamically based on selection
             if selected_property != "All Properties":
                 filtered_dashboard_df = property_detail_df[
                     property_detail_df["Property"].astype(str)
                     == selected_property
                 ]
+                # Match property fixed beds from embedded Property Data
+                match_row = property_beds_df[
+                    property_beds_df["ADDRESS_CLEAN"].str.contains(
+                        selected_property, case=False, na=False
+                    )
+                ]
+                if not match_row.empty:
+                    fixed_total_beds = int(match_row["TOTAL BEDS"].sum())
+                else:
+                    fixed_total_beds = int(filtered_dashboard_df["SUID"].nunique())
+
+                total_occupied_eops = filtered_dashboard_df["SUID"].nunique()
+                total_vacant_beds = max(
+                    0, fixed_total_beds - total_occupied_eops
+                )
+                overall_occupancy_pct = (
+                    (total_occupied_eops / fixed_total_beds) * 100
+                    if fixed_total_beds > 0
+                    else 0
+                )
             else:
                 filtered_dashboard_df = property_detail_df
+                fixed_total_beds = int(property_beds_df["TOTAL BEDS"].sum())
+                total_occupied_eops = property_detail_df["SUID"].nunique()
+                total_vacant_beds = max(
+                    0, fixed_total_beds - total_occupied_eops
+                )
+                overall_occupancy_pct = (
+                    (total_occupied_eops / fixed_total_beds) * 100
+                    if fixed_total_beds > 0
+                    else 0
+                )
+
+            b1, b2, b3, b4 = st.columns(4)
+            b1.metric("🛏️ Total Beds (Fixed)", f"{fixed_total_beds:,}")
+            b2.metric("👥 Occupied Beds (EOPS)", f"{total_occupied_eops:,}")
+            b3.metric("🟢 Vacant Beds", f"{total_vacant_beds:,}")
+            b4.metric("📊 Occupancy Rate", f"{overall_occupancy_pct:.1f}%")
+
+            st.markdown("---")
 
             col_chart, _ = st.columns([2, 1])
             with col_chart:
