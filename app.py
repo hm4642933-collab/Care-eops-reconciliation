@@ -162,7 +162,6 @@ Flat 23, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
 Flat 24, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1
 Flat 25, Low Need, Swan Road, West Drayton, London, UB7 7LA\t1"""
 
-# Parse property lookup data safely
 property_lines = PROPERTY_DATA_RAW.strip().split("\n")
 parsed_property_rows = []
 for line in property_lines:
@@ -176,11 +175,16 @@ for line in property_lines:
 
 property_beds_df = pd.DataFrame(parsed_property_rows)
 property_beds_df["PROPERTY_CLEAN"] = (
-    property_beds_df["Property"].astype(str).str.strip()
+    property_beds_df["Property"].astype(str).str.strip().str.upper()
 )
 property_beds_df["TOTAL BEDS"] = pd.to_numeric(
     property_beds_df["TOTAL BEDS"], errors="coerce"
 ).fillna(0)
+
+# Create a clean dictionary mapping for exact and partial matching
+property_beds_dict = dict(
+    zip(property_beds_df["PROPERTY_CLEAN"], property_beds_df["TOTAL BEDS"])
+)
 
 # Custom Styling
 st.markdown(
@@ -224,7 +228,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Initialize Session States safely
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
@@ -234,7 +237,6 @@ if "navigation_page" not in st.session_state:
 if "processed" not in st.session_state:
     st.session_state.processed = False
 
-# Authentication Portal
 if not st.session_state.logged_in:
     st.title("🔒 Access Login Portal")
     st.write("Please log in to access the Reconciliation & Property Dashboard.")
@@ -253,7 +255,6 @@ if not st.session_state.logged_in:
             st.error("❌ Invalid credentials")
     st.stop()
 
-# Sidebar Navigation
 with st.sidebar:
     st.markdown(
         """
@@ -307,7 +308,6 @@ def to_excel_bytes(df):
     return output.getvalue()
 
 
-# Main Application Header
 st.title("📊 Care Master vs EOPS Reconciliation & Property Portal")
 
 col1, col2 = st.columns(2)
@@ -668,20 +668,28 @@ if st.session_state.get("processed", False):
                 "Search or Select Property:", property_options
             )
 
-            # Property-wise and Grand Total (539) Fixed Beds Calculation
+            # Robust Property-wise Beds Matching Logic
             if selected_property != "All Properties":
                 filtered_dashboard_df = property_detail_df[
                     property_detail_df["Property"].astype(str)
                     == selected_property
                 ]
-                match_row = property_beds_df[
-                    property_beds_df["PROPERTY_CLEAN"].str.contains(
-                        selected_property, case=False, na=False
-                    )
-                ]
-                if not match_row.empty:
-                    fixed_total_beds = int(match_row["TOTAL BEDS"].sum())
+
+                sel_upper = selected_property.strip().upper()
+                fixed_total_beds = 0
+
+                # 1. Exact match check
+                if sel_upper in property_beds_dict:
+                    fixed_total_beds = int(property_beds_dict[sel_upper])
                 else:
+                    # 2. Partial substring matching against Property Data dictionary
+                    for k, v in property_beds_dict.items():
+                        if sel_upper in k or k in sel_upper:
+                            fixed_total_beds = int(v)
+                            break
+
+                # Fallback if no match found in lookup dictionary
+                if fixed_total_beds == 0:
                     fixed_total_beds = int(filtered_dashboard_df["SUID"].nunique())
 
                 total_occupied_eops = filtered_dashboard_df["SUID"].nunique()
