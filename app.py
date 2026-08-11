@@ -137,29 +137,21 @@ def to_excel_bytes(df):
 # Main Application
 st.title("📊 Care Master vs EOPS Reconciliation & Property Portal")
 
-col1, col2, col3 = st.columns(3)
+col1, col2 = st.columns(2)
 with col1:
     cm_file = st.file_uploader(
         "Upload Care Master File (.xlsx)", type=["xlsx", "xls"]
     )
 with col2:
     eops_file = st.file_uploader("Upload EOPS File (.xlsx)", type=["xlsx", "xls"])
-with col3:
-    prop_data_file = st.file_uploader(
-        "Upload Property Data File (.xlsx)", type=["xlsx", "xls"]
-    )
 
 if cm_file:
     st.session_state.cm_file_bytes = cm_file.getvalue()
 if eops_file:
     st.session_state.eops_file_bytes = eops_file.getvalue()
-if prop_data_file:
-    st.session_state.prop_data_bytes = prop_data_file.getvalue()
 
 has_files = (
-    "cm_file_bytes" in st.session_state
-    and "eops_file_bytes" in st.session_state
-    and "prop_data_bytes" in st.session_state
+    "cm_file_bytes" in st.session_state and "eops_file_bytes" in st.session_state
 )
 
 if has_files:
@@ -172,15 +164,9 @@ if has_files:
                 df_eops = pd.read_excel(
                     io.BytesIO(st.session_state.eops_file_bytes), dtype=str
                 )
-                df_prop_meta = pd.read_excel(
-                    io.BytesIO(st.session_state.prop_data_bytes), dtype=str
-                )
 
                 df_cm.columns = [str(c).strip() for c in df_cm.columns]
                 df_eops.columns = [str(c).strip() for c in df_eops.columns]
-                df_prop_meta.columns = [
-                    str(c).strip() for c in df_prop_meta.columns
-                ]
 
                 def get_col(df, possible_names):
                     for name in possible_names:
@@ -470,7 +456,6 @@ if has_files:
                 st.session_state.processed = True
                 st.session_state.final_recon = final_recon
                 st.session_state.property_detail_df = property_detail_df
-                st.session_state.df_prop_meta = df_prop_meta
                 st.success("✅ Data Processed Successfully!")
                 st.rerun()
 
@@ -481,7 +466,6 @@ if st.session_state.get("processed", False):
     try:
         final_recon = st.session_state.final_recon
         property_detail_df = st.session_state.property_detail_df
-        df_prop_meta = st.session_state.df_prop_meta
 
         if st.session_state.navigation_page == "📋 Care Master vs EOPS Reconciliation":
             st.subheader("📋 Care Master vs EOPS Reconciliation Table")
